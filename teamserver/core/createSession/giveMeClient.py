@@ -3,8 +3,12 @@ import random
 
 from termcolor import colored
 import os
-import boto3, botocore
+import botocore
 
+def _get_proxies(self, url):
+    return proxy_definitions
+
+import boto3
 
 def enter_credentials(service, access_key_id, secret_key, region, ua, proxy_definitions):
     args = {
@@ -16,7 +20,7 @@ def enter_credentials(service, access_key_id, secret_key, region, ua, proxy_defi
 
     session_config_args = {}
 
-    if not len(proxy_definitions) == 0:
+    """if not len(proxy_definitions) == 0:
         web_proxy = random.choice(proxy_definitions)
 
         for key, value in web_proxy.items():
@@ -34,7 +38,26 @@ def enter_credentials(service, access_key_id, secret_key, region, ua, proxy_defi
             }
             session_config_args["proxies"] = proxy_config
             session_config_args["proxies_config"] = proxy_configurations
-            # session_config_args["proxies"] = proxy_definitions
+            # session_config_args["proxies"] = proxy_definitions"""
+
+    if proxy_definitions is not None:
+        #print(proxy_definitions)
+        #session_config_args["proxies"] = proxy_definitions
+        if "socks4" in proxy_definitions:
+            os.environ['HTTP_PROXY'] = f"socks4://{proxy_definitions['socks4']}"
+            #os.environ['HTTPS_PROXY'] = f"socks4://{proxy_definitions['socks4']}"
+
+        elif "socks5" in proxy_definitions:
+            os.environ['HTTP_PROXY'] = f"socks5://{proxy_definitions['socks5']}"
+            #os.environ['HTTPS_PROXY'] = f"socks5://{proxy_definitions['socks5']}"
+
+        elif "http" in proxy_definitions:
+            os.environ['HTTP_PROXY'] = f"http://{proxy_definitions['http']}"
+            #os.environ['HTTPS_PROXY'] = f"socks4://{proxy_definitions['socks4']}"
+        # export https_proxy=socks5://127.0.0.1:50010 http_proxy=socks5://127.0.0.1:50010
+
+        #import botocore.endpoint
+        #botocore.endpoint.EndpointCreator._get_proxies = _get_proxy
 
     if not ua == "":
         session_config_args["user_agent"] = ua
@@ -103,17 +126,8 @@ def enter_session(session_name, region, service, ua, proxy_definitions):
 
 def giveMeClient(all_sessions, cred_prof, useragent, web_proxies, service):
     sess = {}
-    # proxy_definitions = {}
-
-    # if not web_proxies == []:
-    #    for proxy in web_proxies:
-    #        proxy_definitions[proxy.split(":")[0]] = proxy
-    # else:
-    #    proxy_definitions = None
-
     proxy_definitions = web_proxies
 
-    c = 0
     if cred_prof == "":
         return {"error": ("{}{}{}{}".format(
             colored("[*] No credentials set. Use '", 'red'),
@@ -122,7 +136,6 @@ def giveMeClient(all_sessions, cred_prof, useragent, web_proxies, service):
             colored("set azure-credentials", "blue"),
             colored("' to set credentials.", "red")
         ))}
-        c = 1
     else:
         for session in all_sessions:
             if session['profile'] == cred_prof:
@@ -138,87 +151,37 @@ def giveMeClient(all_sessions, cred_prof, useragent, web_proxies, service):
                     colored("set region <region>", "blue"),
                     colored("' to set a region.", "red")
                 ))}
-                c = 1
+
             elif value == "":
                 return {"error": ("{}{}{}".format(
                     colored("[*] '", 'red'),
-                    colored("", "blue"),
+                    colored(key, "blue"),
                     colored("' not set. Check credentials.", "red")
                 ))}
-                c = 1
 
-        if c == 0:
-            """            env_aws = {}
-            if os.environ.get('AWS_ACCESS_KEY'):
-                env_aws['AWS_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY')
-                del os.environ['AWS_ACCESS_KEY']
-            os.environ['AWS_ACCESS_KEY'] = sess['access_key_id']
+        if not 'session_token' in sess:
+            profile = enter_credentials(
+                service,
+                sess['access_key_id'],
+                sess['secret_key'],
+                sess['region'],
+                useragent,
+                proxy_definitions
+            )
+            return profile
 
-            if os.environ.get('AWS_SECRET_KEY'):
-                env_aws['AWS_SECRET_KEY'] = os.environ.get('AWS_SECRET_KEY')
-                del os.environ['AWS_SECRET_KEY']
-            os.environ['AWS_SECRET_KEY'] = sess['secret_key']
+        elif 'session_token' in sess and sess['session_token'] != "":
+            profile = enter_credentials_with_session_token(
+                service,
+                sess['access_key_id'],
+                sess['secret_key'],
+                sess['region'],
+                sess['session_token'],
+                useragent,
+                proxy_definitions
+            )
 
-            if os.environ.get('AWS_SESSION_TOKEN'):
-                if 'session_token' in sess and sess['session_token'] != "":
-                    env_aws['AWS_SESSION_TOKEN'] = os.environ.get('AWS_SESSION_TOKEN')
-                    del os.environ['AWS_SESSION_TOKEN']
-                os.environ['AWS_SESSION_TOKEN'] = sess['session_token']
+            return profile
 
-            if os.environ.get('AWS_REGION'):
-                env_aws['AWS_REGION'] = os.environ.get('AWS_REGION')
-                del os.environ['AWS_REGION']
-            os.environ['AWS_REGION'] = sess['region']"""
-
-            if not 'session_token' in sess:
-                profile = enter_credentials(service,
-                                            sess['access_key_id'],
-                                            sess['secret_key'],
-                                            sess['region'],
-                                            useragent,
-                                            proxy_definitions
-                                            )
-                """                del os.environ['AWS_ACCESS_KEY']
-                del os.environ['AWS_SECRET_KEY']
-                del os.environ['AWS_REGION']
-                if os.environ.get('AWS_SESSION_TOKEN'):
-                    del os.environ['AWS_SESSION_TOKEN']
-
-                if env_aws:
-                    os.environ['AWS_ACCESS_KEY'] = env_aws['AWS_ACCESS_KEY']
-                    os.environ['AWS_SECRET_KEY'] = env_aws['AWS_SECRET_KEY']
-                    os.environ['AWS_REGION'] = env_aws['AWS_REGION']
-                    if 'AWS_SESSION_TOKEN' in env_aws:
-                        os.environ['AWS_SESSION_TOKEN'] = env_aws['AWS_SESSION_TOKEN']"""
-
-                #del env_aws
-                return profile
-
-            elif 'session_token' in sess and sess['session_token'] != "":
-
-                profile = enter_credentials_with_session_token(service,
-                                                            sess['access_key_id'],
-                                                            sess['secret_key'],
-                                                            sess['region'],
-                                                            sess['session_token'],
-                                                            useragent,
-                                                            proxy_definitions
-                                                            )
-                """del os.environ['AWS_ACCESS_KEY']
-                del os.environ['AWS_SECRET_KEY']
-                del os.environ['AWS_REGION']
-                if os.environ.get('AWS_SESSION_TOKEN'):
-                    del os.environ['AWS_SESSION_TOKEN']
-
-                if env_aws:
-                    os.environ['AWS_ACCESS_KEY'] = env_aws['AWS_ACCESS_KEY']
-                    os.environ['AWS_SECRET_KEY'] = env_aws['AWS_SECRET_KEY']
-                    os.environ['AWS_REGION'] = env_aws['AWS_REGION']
-                    if 'AWS_SESSION_TOKEN' in env_aws:
-                        os.environ['AWS_SESSION_TOKEN'] = env_aws['AWS_SESSION_TOKEN']
-
-                del env_aws"""
-
-                return profile
-            else:
-                return {"error": (colored("[*] Check if the session key is empty.", "yellow"))}
+        else:
+            return {"error": (colored("[*] Check if the session key is empty.", "yellow"))}

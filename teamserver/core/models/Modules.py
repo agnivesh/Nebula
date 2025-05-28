@@ -210,6 +210,7 @@ def set_module():
         web_proxies = None
     username = body["username"]
     awsregion = body['awsregion']
+    callstoprofile = body['callstoprofile']
 
     # aws_sessions = json.loads(requests.get("{}/api/latest/awscredentials".format(apihost),headers={"Authorization": "Bearer {}".format(jwt_token)}).text)
 
@@ -285,7 +286,7 @@ def set_module():
         if m_name == 'aws':
             try:
                 print(colored(f"[*] User {username} ran module {module} at {str(datetime.now())} on region {awsregion}", "yellow"))
-                return run_aws_module.run_aws_module(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace)
+                return run_aws_module.run_aws_module(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace, callstoprofile)
 
             except Exception as e:
                 import sys

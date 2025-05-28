@@ -15,7 +15,7 @@ class AddCredentials(QtWidgets.QDialog):
 
     current_credentials = ""
 
-    def __init__(self, token, apiHost, apiPort, workspace):
+    def __init__(self, token, apiHost, apiPort, callstoprofile):
         super(AddCredentials, self).__init__()
         uic.loadUi("addCredentialWindow.ui", self)
         self.setFixedSize(self.size())
@@ -28,7 +28,7 @@ class AddCredentials(QtWidgets.QDialog):
         self.awsHasSessionCheckBox.stateChanged.connect(self.enableAWSSessionTokenTextEdit)
         self.addAWSCredsPushButton.clicked.connect(self.setAWSCredentials)
 
-    def setTeamserverSettings(self, token, apiHost, apiPort, workspace):
+    def setTeamserverSettings(self, token, apiHost, apiPort, callstoprofile):
         self.token = token
         self.apiHost = apiHost
         self.apiPort = apiPort

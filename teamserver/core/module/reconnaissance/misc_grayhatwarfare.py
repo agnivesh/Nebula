@@ -57,7 +57,7 @@ description = "Find open buckets on GrayHatWarFare. The buckets can be Azure, AW
 
 aws_command = "No awscli command"
 
-def exploit(workspace):
+def exploit(callstoprofile):
     api_token = variables['API_TOKEN']['value']
     cloud_vendor = variables['CLOUD_VENDOR']['value']
 

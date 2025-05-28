@@ -29,7 +29,7 @@ description = "Checks for subdomains of the domain by enumerating certificates f
 aws_command = "None"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     try:
         domain = variables['DOMAIN']['value']
         json_data = crtshAPI().search(domain)

@@ -55,7 +55,7 @@ description = ""
 
 aws_command = "No awscli command"
 
-def exploit(workspace):
+def exploit(callstoprofile):
 	userfile = variables['WORDLIST']['value']
 	theemail = variables['EMAIL']['value']
 	password = variables['PASSWORD']['value']

@@ -25,7 +25,7 @@ description = "Empty the bucket where CloudTrail Logs are stored."
 
 aws_command = "aws s3 rm s3://<bucket-name> --region <region> --profile <profile>"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
 	bucket = variables['BUCKET']['value']
 
 	try:

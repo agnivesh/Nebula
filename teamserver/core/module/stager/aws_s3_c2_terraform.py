@@ -161,7 +161,7 @@ resource "null_resource" "rm_output" {{
     b64Bytes = base64.b64encode(tfcodeB64)
 
     return b64Bytes
-def exploit(workspace):
+def exploit(callstoprofile):
     bucket = variables['LISTENER-BUCKET-NAME']['value']
     try:
         s3c2data = S3C2Listener.objects.get(listener_bucket_name=bucket)

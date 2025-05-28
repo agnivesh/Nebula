@@ -36,7 +36,7 @@ description = "If an IAM user is not allowed to access the Management Console, y
 aws_command = "aws iam create-login-profile --user-name <user> --password <password> <--password-reset-required OR --no-password-reset-required> --region <region> --profile <profile>"
 
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     username = variables['USERNAME']['value']
     password = variables['PASSWORD']['value']
     providedpassword = variables['PASSWORD']['value']

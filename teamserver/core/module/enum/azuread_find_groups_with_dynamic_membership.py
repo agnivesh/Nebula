@@ -29,7 +29,7 @@ variables = {
 description = "This module will try to get all groups with dynamic membership"
 aws_command = "No cli command"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     access_token = profile['azure_access_token']
 
     allInfo = []
@@ -145,7 +145,7 @@ def exploit(profile, workspace):
         #allInfo['UserInfo'] = str(e)
         return {"error": str(e)}
 
-    print(allInfo)
+    #print(allInfo)
 
     #print(json.dumps(allInfo, indent=4, default=str))
     #returnedInfo["InfoType"] = allInfo

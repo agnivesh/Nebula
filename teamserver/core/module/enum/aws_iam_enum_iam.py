@@ -1,4 +1,4 @@
-import sys
+import sys, os
 
 from mongoengine import DoesNotExist
 
@@ -6,6 +6,8 @@ from core.database.models import AWSUsers
 from core.database.models import AWSGroups
 from core.database.models import AWSRoles
 from core.database.models import AWSPolicies
+
+from core.createSession.giveMeClient import giveMeClient
 
 author = {
     "name":"gl4ssesbo1",
@@ -48,7 +50,26 @@ calls = [
 	"iam:ListGroupsForUser"
 ]
 
-def exploit(profile, workspace):
+#def exploit(profile, callstoprofile):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
+	profile = giveMeClient(
+		all_sessions,
+		cred_prof,
+		useragent,
+		web_proxies,
+		"iam"
+	)
+
+
+
+	stsprofile = giveMeClient(
+		all_sessions,
+		cred_prof,
+		useragent,
+		web_proxies,
+		"sts"
+	)
+
 	resourceType = variables['RESOURCE-TYPE']['value']
 
 	try:
@@ -302,6 +323,7 @@ def otherGetUsers(profile, resourceType):
 	iamData = []
 	userinfo = {}
 	try:
+
 		userlist = profile.list_users()['Users']
 
 	except Exception as e:
@@ -309,6 +331,7 @@ def otherGetUsers(profile, resourceType):
 
 	for user in userlist:
 		try:
+
 			userinfo = profile.get_user(
 				User=user['UserName']
 			)['User']
@@ -316,6 +339,7 @@ def otherGetUsers(profile, resourceType):
 		except Exception as e:
 			pass
 		try:
+
 			userGroups = profile.list_groups_for_user(
 				User=user['UserName']
 			)['Groups']
@@ -325,6 +349,7 @@ def otherGetUsers(profile, resourceType):
 			pass
 
 		try:
+
 			userInlinePolicies = profile.list_user_policies(
 				User=user['UserName']
 			)['PolicyNames']
@@ -501,4 +526,5 @@ def otherGetIAM(profile, resourceType):
 		return {
 			"error": "RESOURCE-TYPE should be either USERS, GROUPS, ROLES, LOCALPOLICIES, AWSPOLICIES, or ALL"
 		}
+
 

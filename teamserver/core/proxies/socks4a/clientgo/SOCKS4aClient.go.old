@@ -1,0 +1,81 @@
+package main
+
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+	"net"
+)
+
+func main() {
+	serverHost := "127.0.0.1"
+	serverPort := 9090
+
+	err := clientConnect(serverHost, serverPort)
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+}
+
+func clientConnect(serverHost string, serverPort int) error {
+	addr := fmt.Sprintf("%s:%d", serverHost, serverPort)
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to proxy server: %v", err)
+	}
+	fmt.Printf("[+] Connected to proxy server %s\n", addr)
+
+	for {
+		// Read destination port (2 bytes)
+		header := make([]byte, 2)
+		if _, err := io.ReadFull(conn, header); err != nil {
+			return fmt.Errorf("failed to read destination port: %v", err)
+		}
+		port := binary.BigEndian.Uint16(header)
+
+		// Read domain name until null byte
+		domain := make([]byte, 0)
+		buf := make([]byte, 1)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return fmt.Errorf("failed to read domain byte: %v", err)
+			}
+			if buf[0] == 0x00 {
+				break
+			}
+			domain = append(domain, buf[0])
+		}
+		destHost := string(domain)
+		fmt.Printf("[+] Connecting to %s:%d\n", destHost, port)
+
+		// Attempt to connect to destination
+		targetAddr := fmt.Sprintf("%s:%d", destHost, port)
+		remote, err := net.Dial("tcp", targetAddr)
+		if err != nil {
+			fmt.Printf("[-] Connection to %s failed: %v\n", targetAddr, err)
+			conn.Write([]byte{0x01}) // failure
+			continue
+		}
+		conn.Write([]byte{0x00}) // success
+
+		// Relay in both directions
+		go relay(conn, remote)
+		go relay(remote, conn)
+	}
+}
+
+func relay(src net.Conn, dst net.Conn) {
+	defer src.Close()
+	defer dst.Close()
+
+	buf := make([]byte, 4096)
+	for {
+		n, err := src.Read(buf)
+		if err != nil || n == 0 {
+			return
+		}
+		if _, err := dst.Write(buf[:n]); err != nil {
+			return
+		}
+	}
+}

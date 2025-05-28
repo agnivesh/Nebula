@@ -48,7 +48,7 @@ description = "This module will create an IAM role, Attach inline admin policy, 
 
 aws_command = ""
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     role = variables['ROLE-NAME']['value']
     externalID = variables['EXTERNAL-ID']['value']
     attackerARN = variables['ATTACKER-ARN']['value']

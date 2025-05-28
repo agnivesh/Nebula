@@ -31,9 +31,11 @@ calls = [
 	"iam:GetUser"
 ]
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
 	try:
 		userName = variables['USER-NAME']['value']
+
+		#print(web_proxies)
 
 		iamProfile = giveMeClient(
 			all_sessions,
@@ -42,6 +44,9 @@ def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
 			web_proxies,
 			"iam"
 		)
+
+		#print(iamProfile)
+
 		user = iamProfile.get_user(UserName=userName)["User"]
 
 		database_data = {

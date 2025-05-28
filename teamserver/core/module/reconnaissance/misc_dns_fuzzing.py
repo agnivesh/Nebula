@@ -37,7 +37,7 @@ description = "Get a list of hosts and checks if they exist."
 aws_command = "No awscli command"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     objects = []
     domain = variables['DOMAIN']['value']
 

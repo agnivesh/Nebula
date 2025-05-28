@@ -72,7 +72,7 @@ description = "Description of your Module"
 aws_command = "aws elasticbeanstack describe-launch-templates --region {} --profile {}"
 
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
     profile = giveMeClient(
         all_sessions=all_sessions,
         cred_prof=cred_prof,

@@ -37,7 +37,7 @@ description = "The module will look for IP Space of AWS, AZURE, GCP, DigitalOcea
 aws_command = "None"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     IPv4_REGEX = "^[0-9]{1,3}[.]{1}[0-9]{1,3}[.]{1}[0-9]{1,3}[.]{1}[0-9]{1,3}$"
     IPv6_REGEX = "^([0-9a-fA-F]{1,4}[:]{0,2}){1,8}$"
 

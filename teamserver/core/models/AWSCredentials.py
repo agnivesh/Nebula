@@ -19,11 +19,9 @@ def list_awscredentials():
 def getuid_aws_creds():
     body = request.get_json()
     try:
-        workspace = body['workspace']
-
         awscredentials = AWSCredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
 
-        return {"Arn": getuid(awscredentials, workspace)}, 200
+        return {"Arn": getuid(awscredentials)}, 200
     except flask_mongoengine.DoesNotExist:
         return {'error': "Credentials do not exist"}, 404
 
@@ -32,17 +30,10 @@ def getuid_aws_creds():
 def getuid_aws_creds_ssmrole():
     body = request.get_json()
     try:
-        workspace = body['workspace']
-
         all_sessions = body["aws_all_sessions"]
         cred_prof = body["aws_profile_name"]
-        workspace = body["workspace"]
         useragent = body["user-agent"]
         web_proxies = body["web_proxies"]
-
-        #awscredentials = AWSCredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
-
-        #return {'UserName': getuid(awscredentials, workspace)}, 200
         return {'UserName': getuidssmrole(all_sessions, cred_prof, useragent, web_proxies)}, 200
     except flask_mongoengine.DoesNotExist:
         return {'error': "Credentials do not exist"}, 404

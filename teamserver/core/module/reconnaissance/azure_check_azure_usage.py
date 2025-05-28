@@ -33,7 +33,7 @@ description = "Check if federation is configured for a domain."
 
 aws_command = "None"
 
-def exploit(workspace):
+def exploit(callstoprofile):
     domain = variables['DOMAIN']['value']
 
     url = 'https://login.microsoftonline.com/getuserrealm.srf?login={}'.format(domain)

@@ -102,6 +102,7 @@ class AWSUsers(db.Document):
     aws_user_permission_boundary = db.DictField()
     aws_access_key_last_used = db.DictField()
     aws_user_tags = db.ListField()
+    aws_user_is_compromised = db.BooleanField()
 
 
 class AWSGroups(db.Document):
@@ -132,6 +133,9 @@ class AWSRoles(db.Document):
     aws_role_policies = db.ListField()
     aws_role_tags = db.ListField()
 
+class AWSRDSDBInstances(db.Document):
+    aws_rds_instance_identifier = db.StringField(required=True, unique=True)
+    aws_rds_instance_document = db.DictField()
 
 class AWSInstances(db.Document):
     aws_instance_id = db.StringField(required=True, unique=True)
@@ -189,6 +193,7 @@ class AWSS3Bucket(db.Document):
     aws_s3_bucket_name = db.StringField(required=True, unique=True)
     aws_s3_bucket_owner = db.StringField()
     aws_s3_creation_date = db.DateTimeField()
+    aws_s3_region = db.DateTimeField()
     aws_s3_bucket_objects = db.DictField()
     aws_s3_deleted_objects = db.DictField()
     aws_s3_bucket_policy = db.DictField()
@@ -311,3 +316,29 @@ class S3C2Listener(db.Document):
 class S3C2Particle(db.Document):
     particle_key_name = db.StringField(required=True, unique=True)
     particle_listener_name = db.StringField(required=True, unique=True)
+
+class KubeCluster(db.Document):
+    kube_cluster_name = db.StringField(required=True)
+    kube_cluster_ports = db.DictField()
+    kube_cluster_nodes = db.ListField()
+    kube_cluster_pods = db.ListField()
+    kube_cluster_users = db.ListField()
+
+class KubeCredential(db.Document):
+    kube_credential_name = db.StringField(required=True)
+    kube_credential_token = db.StringField()
+    kube_credential_config_file = db.DictField()
+    kube_credential_oidc_file = db.DictField()
+
+class TeamserverLogs(db.Document):
+    teamserver_event_time = db.DateTimeField()
+    teamserver_event_user = db.StringField()
+    teamserver_event_description = db.StringField()
+
+class ReverseTunnels(db.Document):
+    teamserver_reverse_tunnel_listener = db.StringField()
+    teamserver_reverse_tunnel_status = db.BooleanField()
+    teamserver_reverse_tunnel_socks_port = db.IntField()
+    teamserver_reverse_tunnel_listening_port = db.IntField()
+    teamserver_reverse_tunnel_mgmt_port = db.IntField()
+

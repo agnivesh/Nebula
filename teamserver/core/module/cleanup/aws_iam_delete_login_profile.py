@@ -25,7 +25,7 @@ description = "Delete access of a user to the Management Console"
 
 aws_command = "aws iam delete-login-profile --user-name Bob --region <region> --profile <profile>"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     user = variables['USERNAME']['value']
 
     try:

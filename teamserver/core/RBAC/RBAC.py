@@ -1,13 +1,18 @@
-from flask_jwt_extended import get_jwt_identity
-from teamserver.core.database.models import Cosmonaut
+from flask_rbac import RBAC, Role, UserMixin
 
-def check_user(role):
-    curuser = get_jwt_identity()
-    print(curuser)
-    cosmonaut = Cosmonaut.objects.get(cosmonaut_name=curuser)
+class User(UserMixin):
+    def __init__(self, id, role_name):
+        self.id = id
+        self.role = Role.get(role_name)
 
-    if not role in cosmonaut['roles']:
-        return {"error": f"User '{curuser}' needs role '{role}' to execute this command"}
+def assignRolesToUser(user, role):
+    users = {
+        '1': User('1', 'admin'),
+        '2': User('2', 'editor'),
+        '3': User('3', 'viewer')
+    }
 
-    else:
-        return None
+def get_current_user():
+    identity = get_jwt_identity()
+    return users.get(identity)
+

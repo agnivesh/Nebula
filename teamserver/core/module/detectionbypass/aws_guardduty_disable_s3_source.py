@@ -29,7 +29,7 @@ calls = [
 	"guardduty:UpdateDetector"
 ]
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
 	detectorID = variables['DETECTOR-ID']['value']
 
 	try:

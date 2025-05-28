@@ -284,7 +284,7 @@ SERVICES = [
     "xray"
 ]
 
-def enum_privs(profile_dict, workspace):
+def enum_privs(profile_dict, callstoprofile):
     full_perm = {}
     list_of_perms = {}
     read_perm = {

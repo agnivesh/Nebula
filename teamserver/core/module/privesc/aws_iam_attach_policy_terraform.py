@@ -70,7 +70,7 @@ def attachPolicy(idname, idtype, polarn, profile):
             "error": f"Error Attaching: {str(e)}"
         }
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
     policy_arn = variables['POLICY-ARN']['value']
     id_name = variables['IDENTITY-NAME']['value']
     id_type = variables['IDENTITY-TYPE']['value']

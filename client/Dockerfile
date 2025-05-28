@@ -2,6 +2,8 @@ FROM python:3.10
 
 WORKDIR /nebula_client
 
+ADD ./.nebula-history-file /nebula_client/.nebula-history-file
+
 COPY . .
 
 RUN apt update && apt upgrade -y

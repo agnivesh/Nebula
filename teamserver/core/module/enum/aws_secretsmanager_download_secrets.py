@@ -32,7 +32,7 @@ calls = [
 	"secretsmanager:GetSecretValue"
 ]
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
 	try:
 		secretName = variables['SECRET-NAME']['value']
 
@@ -65,7 +65,7 @@ def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
 
 		for secret in secretnames:
 			try:
-				secretValueReq = smProfile.get_secret_valie(SecretId=secret)
+				secretValueReq = smProfile.get_secret_value(SecretId=secret)
 				if 'SecretString' in secretValueReq:
 					returndict.append(
 						{

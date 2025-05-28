@@ -220,7 +220,7 @@ func main() {{
     b64Bytes = base64.b64encode(gocodeB64)
     return b64Bytes
 
-def exploit(workspace):
+def exploit(callstoprofile):
     bucket = variables['LISTENER-BUCKET-NAME']['value']
     try:
         s3c2data = S3C2Listener.objects.get(listener_bucket_name=bucket)

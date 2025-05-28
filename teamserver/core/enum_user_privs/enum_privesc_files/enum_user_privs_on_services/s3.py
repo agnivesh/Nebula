@@ -2,7 +2,7 @@ import sys
 
 import boto3
 
-def enum_privs(profile_dict, workspace):
+def enum_privs(profile_dict, callstoprofile):
     region = profile_dict['region']
     access_key_id = profile_dict['access_key_id']
     secret_key = profile_dict['secret_key']

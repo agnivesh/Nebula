@@ -30,7 +30,7 @@ description = "Gets the name of a bucket and deletes it. The bucket policy shoul
 
 aws_command = "aws s3 delete-bucket --region {} --profile {}"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     bucket = variables['BUCKET']['value']
     try:
         profile.delete_bucket(

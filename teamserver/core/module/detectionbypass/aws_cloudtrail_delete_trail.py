@@ -29,7 +29,7 @@ description = "Delete a CloudTrail Trail on a specific Region."
 
 aws_command = "aws ec2 describe-launch-templates --region {} --profile {}"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
 	trailName = variables['TRAIL-NAME']['value']
 
 	try:

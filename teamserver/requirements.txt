@@ -62,3 +62,6 @@ crtsh
 flask_rbac
 #botocore
 #docker
+flask-rbac
+python-nmap
+requests[socks]

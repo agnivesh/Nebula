@@ -43,7 +43,7 @@ description = "This module will create an IAM user, Attach inline admin policy, 
 
 aws_command = ""
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     user = variables['USERNAME']['value']
     createLP = variables['CREATE-LOGIN-PROFILE']['value']
     policyDoc = variables['POLICY-TO-ATTACH']['value']

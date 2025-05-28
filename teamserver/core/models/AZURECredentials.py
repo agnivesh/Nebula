@@ -34,7 +34,7 @@ def getuid_aws_creds():
 def get_azurecredentials():
     body = request.get_json()
     try:
-        azurecredentials = AZURECredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
+        azurecredentials = AZURECredentials.objects.get(azure_creds_name=body.get('azure_creds_name'))
 
         return {'azurecredentials': azurecredentials}, 200
     except flask_mongoengine.DoesNotExist:
@@ -45,7 +45,7 @@ def get_azurecredentials():
 def generate_access_key_azurecredentials_devicecode():
     body = request.get_json()
     try:
-        azurecredentials = AZURECredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
+        azurecredentials = AZURECredentials.objects.get(azure_creds_name=body.get('azure_creds_name'))
 
         return {'azurecredentials': azurecredentials}, 200
     except flask_mongoengine.DoesNotExist:
@@ -56,7 +56,7 @@ def generate_access_key_azurecredentials_devicecode():
 def generate_access_key_azurecredentials():
     body = request.get_json()
     try:
-        azurecredentials = AZURECredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
+        azurecredentials = AZURECredentials.objects.get(azure_creds_name=body.get('azure_creds_name'))
 
         return {'azurecredentials': azurecredentials}, 200
     except flask_mongoengine.DoesNotExist:
@@ -67,7 +67,7 @@ def generate_access_key_azurecredentials():
 def regenerate_access_key_azurecredentials():
     body = request.get_json()
     try:
-        azurecredentials = AZURECredentials.objects.get(aws_profile_name=body.get('aws_profile_name'))
+        azurecredentials = AZURECredentials.objects.get(azure_creds_name=body.get('azure_creds_name'))
 
         return {'azurecredentials': azurecredentials}, 200
     except flask_mongoengine.DoesNotExist:
@@ -81,7 +81,7 @@ def set_azurecredentials():
     try:
         # aws_creds = AZURECredentials.objects(**body).save()
         aws_creds = AZURECredentials(**body).save()
-        return {"message": "Credentials of '{}' was created!".format(body['aws_profile_name'])}, 200
+        return {"message": "Credentials of '{}' was created!".format(body['azure_creds_name'])}, 200
 
     except Exception as e:
         if "Tried to save duplicate unique keys" in str(e):
@@ -97,6 +97,6 @@ def delete_azurecredentials():
         body = request.get_json()
         azurecredentials_name = body['azurecredentials_name']
         AZURECredentials.objects.get_or_404(azurecredentials_name=azurecredentials_name).delete()
-        return {"message": "Credentials of '{}' was deleted!".format(body['aws_profile_name'])}, 200
+        return {"message": "Credentials of '{}' was deleted!".format(body['azure_creds_name'])}, 200
     except Exception as e:
         return sys.exc_info()[1], 500

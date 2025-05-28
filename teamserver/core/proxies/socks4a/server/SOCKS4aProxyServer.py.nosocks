@@ -1,0 +1,95 @@
+# server.py
+import socket
+import threading
+import uuid
+
+AGENTS = {}  # agent_id -> control_conn
+TUNNELS = {}  # tunnel_id -> (client_conn, agent_id)
+
+def handle_control(conn, addr):
+    agent_id = str(addr)
+    AGENTS[agent_id] = conn
+    print(f"Agent registered: {agent_id}")
+
+    try:
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                break
+            print(f"Control data from agent {agent_id}: {data.decode()}")
+    finally:
+        del AGENTS[agent_id]
+        conn.close()
+
+def handle_client(client_conn, agent_id, target_host):
+    if agent_id not in AGENTS:
+        print("No agent found")
+        client_conn.close()
+        return
+
+    tunnel_id = str(uuid.uuid4())
+    TUNNELS[tunnel_id] = (client_conn, agent_id)
+
+    # Notify agent via control channel
+    AGENTS[agent_id].sendall(f"FORWARD {tunnel_id} {target_host}\n".encode())
+
+def handle_data_listener():
+    s = socket.socket()
+    s.bind(("0.0.0.0", 9001))  # Data channel
+    s.listen(100)
+    print("Server data channel listening on 9001")
+
+    while True:
+        conn, _ = s.accept()
+        threading.Thread(target=handle_data_tunnel, args=(conn,)).start()
+
+def handle_data_tunnel(conn):
+    tunnel_id = conn.recv(1024).decode().strip()
+    if tunnel_id not in TUNNELS:
+        conn.close()
+        return
+
+    client_conn, _ = TUNNELS.pop(tunnel_id)
+    print(f"Tunnel connected: {tunnel_id}")
+
+    # Pipe data between client and agent
+    threading.Thread(target=pipe, args=(client_conn, conn)).start()
+    threading.Thread(target=pipe, args=(conn, client_conn)).start()
+
+def pipe(src, dst):
+    try:
+        while True:
+            data = src.recv(4096)
+            if not data:
+                break
+            dst.sendall(data)
+    finally:
+        src.close()
+        dst.close()
+
+def expose_port(listen_port, agent_id, target_host):
+    s = socket.socket()
+    s.bind(("0.0.0.0", listen_port))
+    s.listen(100)
+    print(f"Exposed port {listen_port} → {agent_id}:{target_host}")
+
+    while True:
+        conn, _ = s.accept()
+        threading.Thread(target=handle_client, args=(conn, agent_id, target_host)).start()
+
+def start_server():
+    ctrl_socket = socket.socket()
+    ctrl_socket.bind(("0.0.0.0", 9000))  # Control channel
+    ctrl_socket.listen(10)
+    print("Server control channel listening on 9000")
+
+    threading.Thread(target=handle_data_listener).start()
+
+    while True:
+        conn, addr = ctrl_socket.accept()
+        threading.Thread(target=handle_control, args=(conn, addr)).start()
+
+if __name__ == "__main__":
+    start_server()
+    # To expose port 8080, route to agent's localhost:8000:
+    # threading.Thread(target=expose_port, args=(8080, 'agent_id', '127.0.0.1:8000')).start()

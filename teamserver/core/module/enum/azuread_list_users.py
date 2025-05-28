@@ -30,7 +30,7 @@ global device_code_request_json
 description = "This module will try to get as many information on the user's account on O365, based on the its privileges."
 aws_command = "No cli command"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     access_token = profile['azure_access_token']
 
     # --------------------------------------------------

@@ -25,7 +25,7 @@ description = "Disables a GD Detector on a specific region. Mind you, many secur
 
 aws_command = "aws guardduty update-detector --detector-id <detector-id>  --no-enable  --region <region> --profile <profile>"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
 	detectorID = variables['DETECTOR-ID']['value']
 
 	try:

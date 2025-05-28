@@ -32,7 +32,7 @@ description = "Delete access key of a user by providing it."
 
 aws_command = "aws iam delete-access-key --access-key-id <access key> --user-name <user> --region <region> --profile <profile>"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     user = variables['USERNAME']['value']
     access_key = variables['ACCESS-KEY']['value']
 

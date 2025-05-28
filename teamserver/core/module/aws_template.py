@@ -31,7 +31,7 @@ calls = [
 	"iam:GetUser"
 ]
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
 	try:
 		userName = variables['USER-NAME']['value']
 

@@ -49,7 +49,7 @@ description = "Gets the name of a basename or a list of basenames separated by c
 aws_command = "No awscli command"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     objects = []
     basenames = {}
 

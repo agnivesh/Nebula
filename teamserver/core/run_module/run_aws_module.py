@@ -5,6 +5,11 @@ import os
 import boto3, botocore
 from inspect import signature
 
+def setupProxy(botoSession):
+    session = requests.Session()
+    session.mount("http://", SOCKSAdapter())
+    return SOCKSProxyManager(proxy, **kwargs)
+
 def enter_credentials(service, access_key_id, secret_key, region, ua, proxy_definitions):
     args = {
         "service_name": service,
@@ -21,6 +26,7 @@ def enter_credentials(service, access_key_id, secret_key, region, ua, proxy_defi
         session_config_args["user_agent"] = ua
         session_config = botocore.config.Config(**session_config_args)
         args["config"] = session_config
+
 
     client = boto3.client(**args)
     return client
@@ -70,13 +76,13 @@ def enter_session(session_name, region, service, ua, proxy_definitions):
 
     return boto_session.client(**args)
 
-def run_aws_module(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace):
+def run_aws_module(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace, callstoprofile):
     sig = signature(imported_module.exploit)
 
     if len(sig.parameters) == 1 or len(sig.parameters) == 2:
         return run_aws_module_one_service(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace)
     elif len(sig.parameters) == 5:
-        return imported_module.exploit(all_sessions, cred_prof, useragent, web_proxies, workspace)
+        return imported_module.exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile)
 
 def run_aws_module_one_service(imported_module, all_sessions, cred_prof, useragent, web_proxies, workspace):
     service = imported_module.variables['SERVICE']['value']

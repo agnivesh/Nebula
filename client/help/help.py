@@ -86,6 +86,12 @@ def shell_help():
     -------------------                 -----------''', "green", attrs=['bold']))
     print(colored(
     '''    shell exit_particle_shell           Kill a connection
+    shell aws_meta_data                 Retrieve the AWS IMDSv1 Credentials from EC2 Instance
+    shell aws_meta_data_v2              Retrieve the AWS IMDSv2 Credentials from EC2 Instance
+    shell azure_meta_data               Retrieve the Azure Meta-Data Token from Azure VM
+    shell gcp_meta_data                 Retrieve the GCP Meta-Data Token from GCP VM
+    shell upload                        Upload a file from the attacker's machine to the target
+    shell download                      Download a file from the target to the attacker machine
     shell <command>                     Run a command on a system. You don't need " on the command, just shell <command1> <command2>
     '''))
 

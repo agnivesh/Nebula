@@ -37,7 +37,7 @@ DANGEROUS_POLICIES = [
 ]
 
 
-def getuid(profile_dict, workspace):
+def getuid(profile_dict):
     region = profile_dict['aws_region']
     access_key_id = profile_dict['aws_access_key']
     secret_key = profile_dict['aws_secret_key']

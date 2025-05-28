@@ -55,7 +55,6 @@ def authenticate_clientid_clientsecret(client_id, client_secret, tenant, resourc
         client_secret
     )
 
-    print(token)
     return token
 
 def acquire_token_with_client_certificate(resource_uri, client_id, certificate, thumbprint):

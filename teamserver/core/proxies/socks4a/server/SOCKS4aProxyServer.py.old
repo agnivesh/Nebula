@@ -1,0 +1,86 @@
+# socks4a_reverse_proxy_server.py
+import socket
+import threading
+import struct
+
+def handle_local(client_socket, remote_socket):
+    try:
+        header = client_socket.recv(8)
+        if len(header) < 8:
+            client_socket.close()
+            return
+
+        vn, cd, dstport, dstip = struct.unpack(">BBH4s", header)
+        if vn != 4 or cd != 1:
+            client_socket.close()
+            return
+
+        # Read until null byte (User ID)
+        while True:
+            if client_socket.recv(1) == b'\x00':
+                break
+
+        dest_host = None
+        if dstip[:3] == b'\x00\x00\x00':
+            # SOCKS4a
+            domain = b""
+            while True:
+                byte = client_socket.recv(1)
+                if byte == b'\x00':
+                    break
+                domain += byte
+            dest_host = domain.decode()
+        else:
+            dest_host = socket.inet_ntoa(dstip)
+
+        # Send destination info to remote client
+        remote_socket.sendall(struct.pack(">H", dstport) + dest_host.encode() + b'\x00')
+
+        # Receive connection success from client
+        status = remote_socket.recv(1)
+        if status != b'\x00':
+            client_socket.close()
+            return
+
+        # Send SOCKS success response to local client
+        client_socket.sendall(struct.pack(">BBH4s", 0x00, 0x5A, dstport, dstip))
+
+        # Start full-duplex
+        def forward(src, dst):
+            try:
+                while True:
+                    data = src.recv(4096)
+                    if not data:
+                        break
+                    dst.sendall(data)
+            finally:
+                src.close()
+                dst.close()
+
+        threading.Thread(target=forward, args=(client_socket, remote_socket)).start()
+        threading.Thread(target=forward, args=(remote_socket, client_socket)).start()
+
+    except Exception as e:
+        client_socket.close()
+
+def server(listen_host="0.0.0.0", listen_port=1080, remote_port=9090):
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind((listen_host, listen_port))
+    listener.listen(5)
+    print(f"[+] SOCKS4a server listening on {listen_host}:{listen_port}")
+
+    remote_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    remote_listener.bind((listen_host, remote_port))
+    remote_listener.listen(1)
+    print(f"[+] Waiting for remote client on {listen_host}:{remote_port}")
+
+    remote_socket, addr = remote_listener.accept()
+    print(f"[+] Remote client connected from {addr[0]}:{addr[1]}")
+
+    while True:
+        client_socket, addr = listener.accept()
+        print(f"[+] Local SOCKS client connected from {addr[0]}:{addr[1]}")
+        threading.Thread(target=handle_local, args=(client_socket, remote_socket)).start()
+
+if __name__ == "__main__":
+    server()

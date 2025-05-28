@@ -38,7 +38,7 @@ description = "Description of your Module"
 aws_command = "None"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     domain = variables['DOMAIN']['value']
 
     country_code = variables['COUNTRY_CODE']['value']

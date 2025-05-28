@@ -498,7 +498,7 @@ def filterResourcesByServiceAccountAndRegion(resource):
         resourceType
     ]
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     lookup_attribute = variables['LOOKUP-ATTRIBUTE']['value']
     lookup_value = variables['LOOKUP-ATTRIBUTE-VALUE']['value']
     start_time = variables['START-TIME']['value']

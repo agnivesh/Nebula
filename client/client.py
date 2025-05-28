@@ -1,6 +1,6 @@
 # !/usr/bin/python3
 import argparse
-import base64
+import base64, binascii
 from getpass import getpass
 import json
 import os
@@ -48,6 +48,19 @@ parser.add_argument('-p', '--password', type=str, help='The password for user \'
 parser.add_argument("-b", action='store_true', help="Do not print banner")
 parser.add_argument("-c", "--config-file", help="Config File path")
 args = parser.parse_args()
+
+
+def AWSAccount_from_AWSKeyID(AWSKeyID):
+    trimmed_AWSKeyID = AWSKeyID[4:] #remove KeyID prefix
+    x = base64.b32decode(trimmed_AWSKeyID) #base32 decode
+    y = x[0:6]
+
+    z = int.from_bytes(y, byteorder='big', signed=False)
+    mask = int.from_bytes(binascii.unhexlify(b'7fffffffff80'), byteorder='big', signed=False)
+
+    e = (z & mask)>>7
+    return (e)
+
 
 if args.config_file is None:
     apihost = "http://{}:{}".format(args.apiHost, args.apiPort)
@@ -238,6 +251,7 @@ AWS_REGIONS = [
 global web_proxies
 
 comms = {
+    "get-account-from-access-key": None,
     "list_aws_iam_users": None,
     "list_aws_s3_buckets": None,
     "get_aws_s3_bucket": None,
@@ -276,10 +290,18 @@ comms = {
         "ssmrole": None
     },
     "set": {
-        "web-proxies": None,
+        #"terraform": {
+        #    "true": None,
+        #    "false": None
+        #},
+        "proxy-definitions": {
+            "http": None,
+            "socks4": None,
+            "socks5": None
+        },
         "aws-credentials": None,
         "azure-credentials": None,
-        "azuread-credentials": None,
+        #"azuread-credentials": None,
         "do-credentials": None,
         "gcp-credentials": None,
         "user-agent": {
@@ -344,7 +366,13 @@ comms = {
         "exit": None,
         "upload": None,
         "download": None,
-        "run_in_memory":None
+        #"run_in_memory":None,
+        "aws_meta_data":None,
+        "aws_meta_data_v2":None,
+        "azure_meta_data":None,
+        "gcp_meta_data":None,
+        "socks4a":None,
+        "postexploit": None
     },
     "enum_user_privs":None,
     "rename":{
@@ -453,43 +481,19 @@ def update_all_sessions_azure():
     azure_sessions = json.loads(requests.get("{}/api/latest/azurecredentials".format(apihost),
                                              headers={"Authorization": "Bearer {}".format(jwt_token)}).text)
 
-    test = 1
     for az_sess in azure_sessions:
         for ass in all_sessions:
             if az_sess['azure_creds_name'] == ass['profile']:
-                test = 0
-                if "azure_access_token" in az_sess:
-                    if az_sess['azure_access_token'] == ass['azure_access_token']:
-                        pass
-                    else:
-                        all_sessions.remove(ass)
-                        comms['use']['credentials'][az_sess['azure_creds_name']] = None
-                        comms['remove']['credentials'][az_sess['azure_creds_name']] = None
-                        az_sess['profile'] = az_sess['azure_creds_name']
-                        del (az_sess['azure_creds_name'])
-                        az_sess['provider'] = 'AZURE'
+                continue
 
-                        all_sessions.append(az_sess)
-                        continue
-                else:
-                    all_sessions.remove(ass)
-                    comms['use']['credentials'][az_sess['azure_creds_name']] = None
-                    comms['remove']['credentials'][az_sess['azure_creds_name']] = None
-                    az_sess['profile'] = az_sess['azure_creds_name']
-                    del (az_sess['azure_creds_name'])
-                    az_sess['provider'] = 'AZURE'
+            else:
+                comms['use']['credentials'][az_sess['azure_creds_name']] = None
+                comms['remove']['credentials'][az_sess['azure_creds_name']] = None
+                az_sess['profile'] = az_sess['azure_creds_name']
+                del (az_sess['azure_creds_name'])
+                az_sess['provider'] = 'AZURE'
 
-                    all_sessions.append(az_sess)
-                    continue
-        if test == 1:
-            comms['use']['credentials'][az_sess['azure_creds_name']] = None
-            comms['remove']['credentials'][az_sess['azure_creds_name']] = None
-            az_sess['profile'] = az_sess['azure_creds_name']
-            del (az_sess['azure_creds_name'])
-            az_sess['provider'] = 'AZURE'
-
-            all_sessions.append(az_sess)
-            continue
+                all_sessions.append(az_sess)
 
 def unique_sessions():
     global all_sessions
@@ -513,6 +517,8 @@ particle_command_key = ""
 particle_output_key = ""
 particle = ''
 def main(workspace, particle, module_char):
+    terraform = False
+    callstoprofile = {}
     """
     dbdata = {
         "particle_key_name": "",
@@ -538,7 +544,7 @@ def main(workspace, particle, module_char):
     cred_prof = ""
     global username
     global web_proxies
-    web_proxies = []
+    web_proxies = {}
 
     HTTP_PROXY_CERT = ""
 
@@ -710,7 +716,8 @@ def main(workspace, particle, module_char):
         command = session.prompt(
             ANSI(com),
             completer=completer,
-            complete_style=CompleteStyle.READLINE_LIKE
+            complete_while_typing = True
+            #complete_style=CompleteStyle.READLINE_LIKE
         )
         command.strip()
 
@@ -771,15 +778,15 @@ def main(workspace, particle, module_char):
                         except Exception as e:
                             print(
                                 colored(
-                                    "[*] The bucket does not exist. Deleting listener", "red"
+                                    f"[*] Error listing listeners: {str(e)}", "red"
                                 )
                             )
                             dellistener = requests.delete("{}/api/latest/listeners".format(apihost),
-                                                     headers={
-                                                         "Authorization": "Bearer {}".format(jwt_token)
-                                                     },
-                                                     json={"listener_bucket_name": listener['listener_bucket_name']}
-                                                     )
+                                headers={
+                                    "Authorization": "Bearer {}".format(jwt_token)
+                                },
+                                json={"listener_bucket_name": listener['listener_bucket_name']}
+                            )
 
                             if not dellistener.status_code == 200:
                                 print(dellistener.json()['error'])
@@ -804,9 +811,7 @@ def main(workspace, particle, module_char):
 
             n_tab = 0
             global output
-
             update_all_sessions_azure()
-
             unique_sessions()
 
             if command == 'help':
@@ -1080,6 +1085,24 @@ def main(workspace, particle, module_char):
                     """
 
 
+            elif command.split(" ")[0] == 'get-account-from-access-key':
+                if len(command.split(" ")) == 1:
+                    if curr_creds is None:
+                        print(
+                            colored("Select a set of AWS Credenrials using: use credentials <credname>", "red")
+                        )
+                    else:
+                        if curr_creds['provider'] == "AWS":
+                            AWSKeyID = curr_creds['access_key_id']
+                            print("account id:" + "{:012d}".format(AWSAccount_from_AWSKeyID(AWSKeyID)))
+                        else:
+                            print(
+                                colored("Select a set of AWS Credenrials using: use credentials <credname>", "red")
+                            )
+                else:
+                    AWSKeyID = command.split(" ")[1]
+                    print("account id:" + "{:012d}".format(AWSAccount_from_AWSKeyID(AWSKeyID)))
+
             elif command.split(" ")[0] == 'banner':
                 banner.banner(
                     module_count_dict['nr_of_cloud_modules'],
@@ -1156,8 +1179,8 @@ def main(workspace, particle, module_char):
                                 "[*] No listeners configured", "red"
                             )
                         )
-                elif command.split(" ")[1] == 'web-proxies':
-                    if len(web_proxies) > 0:
+                elif command.split(" ")[1] == 'proxies':
+                    if web_proxies is not {}:
                         print(colored("-------------------------------------",
                                       "yellow"))
 
@@ -1167,9 +1190,9 @@ def main(workspace, particle, module_char):
                         ))
                         print(colored("-------------------------------------",
                                       "yellow"))
-                        for wp in web_proxies:
+                        for wptype, wp in web_proxies.items():
                             print("\t{}".format(
-                                colored(wp, "green"),
+                                colored(f"{wptype}: {wp}", "green"),
 
                             ))
                         print()
@@ -1689,7 +1712,7 @@ def main(workspace, particle, module_char):
                                             if iamuser['profile'] == cred_prof:
                                                 iamuser['region'] = AWSregion
 
-                                                module_output[AWSregion] = RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, AWSregion)
+                                                module_output[AWSregion] = RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, AWSregion, callstoprofile)
 
 
                                                 #if module_char.split("/")[0] == "stager" or module_char.split("/")[0] == "listeners":
@@ -1712,10 +1735,11 @@ def main(workspace, particle, module_char):
                                                                 elif module_options['module_options']['STAGER-TYPE'] == "golang":
                                                                     with open(
                                                                             f".stagers/{AWSregion}_{module_output[AWSregion]['OutPutFile']}.go",
-                                                                            "w") as gofile:
-                                                                        gofile.write(base64.b64decode(
-                                                                            module_output[AWSregion]['Code']).decode())
+                                                                            "wb") as gofile:
+                                                                        gofile.write(base64.b64decode(module_output[AWSregion]['Code']))
                                                                         gofile.close()
+
+                                                                    """
                                                                     currdir = os.getcwd()
                                                                     os.chdir(".stagers/")
                                                                     goos = module_output['GOOS']
@@ -1731,10 +1755,9 @@ def main(workspace, particle, module_char):
                                                                     os.remove(
                                                                         f"{AWSregion}_{module_output[AWSregion]['OutPutFile']}")
                                                                     os.remove(
-                                                                        f"{AWSregion}_{module_output[AWSregion]['OutPutFile']}.go")
+                                                                        f"{AWSregion}_{module_output[AWSregion]['OutPutFile']}.go")"""
                                                                     del (module_output[AWSregion]['Code'])
-                                                                    module_output[AWSregion][
-                                                                        'OutPutFile'] = f".stagers/{AWSregion}_{module_output[AWSregion]['OutPutFile']}",
+                                                                    module_output[AWSregion]['OutPutFile'] = f".stagers/{AWSregion}_{module_output[AWSregion]['OutPutFile']}",
                                                                 #PrintAWSModule(module_output)
                                                             except FileNotFoundError:
                                                                 print(
@@ -1766,6 +1789,7 @@ def main(workspace, particle, module_char):
                                     jwt_token,
                                     apihost,
                                     username,
+                                    None,
                                     None
                                 )
 
@@ -1790,52 +1814,41 @@ def main(workspace, particle, module_char):
                                                 elif module_char.split("_")[-1] == "golang":
                                                     if not os.path.exists(f".stagers/{module_output['ModuleName']['OutPutFile']}"):
                                                         os.mkdir(f".stagers/{module_output['ModuleName']['OutPutFile']}")
+                                                        try:
+                                                            with open(
+                                                                    f".stagers/{module_output['ModuleName']['OutPutFile']}/{module_output['ModuleName']['OutPutFile']}",
+                                                                    "wb") as gofile:
+                                                                gofile.write(base64.b64decode(
+                                                                    module_output['ModuleName']['Code']))
+                                                                gofile.close()
 
+                                                            """
+                                                            currdir = os.getcwd()
+                                                            os.chdir(".stagers/")
+                                                            goos = module_output['GOOS']
+                                                            goarch = module_output['GOARCH']
 
-                                                    with open(f".stagers/{module_output['ModuleName']['OutPutFile']}/{module_output['ModuleName']['OutPutFile']}.go", "w") as gofile:
-                                                        gofile.write(base64.b64decode(module_output['ModuleName']['Code']).decode())
-                                                        gofile.close()
+                                                            os.popen(
+                                                                f"go mod init golangs3stager; go mod tidy; GOOS={goos} GOARCH={goarch} go build -o {AWSregion}_{module_output[AWSregion]['OutPutFile']}")
+                                                            os.chdir(currdir)
+                                                            os.remove(
+                                                                "./go.mod")
+                                                            os.remove(
+                                                                "./go.sum")
+                                                            os.remove(
+                                                                f"{AWSregion}_{module_output[AWSregion]['OutPutFile']}")
+                                                            os.remove(
+                                                                f"{AWSregion}_{module_output[AWSregion]['OutPutFile']}.go")"""
+                                                            del (module_output['ModuleName']['Code'])
+                                                            module_output['ModuleName']['OutPutFile'] = f".stagers/{module_output['ModuleName']['OutPutFile']}/{module_output['ModuleName']['OutPutFile']}",
+                                                        # PrintAWSModule(module_output)
+                                                        except FileNotFoundError:
+                                                            print(
+                                                                colored(
+                                                                    "Please, only put the file name that will be stored on directory '.stagers'",
+                                                                    "red")
+                                                            )
 
-                                                    goos = module_options['module_options']['GOOS']['value']
-                                                    goarch = module_options['module_options']['GOARCH']['value']
-                                                    '''
-                                                    try:
-                                                        client = docker.from_env()
-                                                        client.images.pull('golang:latest')
-
-                                                        client.containers.run(
-                                                            'golang:latest', f"cd /stagers; GOOS={goos} GOARCH={goarch}; go mod init golangs3stager; go mod tidy; go build -o {module_output['ModuleName']['OutPutFile']}",
-                                                            volumes={
-                                                                f"{os.getcwd()}/.stagers/{module_output['ModuleName']['OutPutFile']}": {
-                                                                    'bind': "/stagers",
-                                                                    'mode': 'rw'
-                                                                }
-                                                            },
-                                                            detach=True
-                                                        )
-                                                    except Exception as e:
-                                                        print(
-                                                            colored(f"[*] {str(e)}", "red")
-                                                        )
-                                                    '''
-                                                    #currdir = os.getcwd()
-                                                    #os.chdir(f".stagers/{module_output['ModuleName']['OutPutFile']}")
-
-                                                    #goos = module_options['module_options']['GOOS']['value']
-                                                    #goarch = module_options['module_options']['GOARCH']['value']
-                                                    #print(f"GOOS={goos}; export GOARCH={goarch}; go mod init golangs3stager; go mod tidy; go build -o {module_output['ModuleName']['OutPutFile']}")
-                                                    #print(os.popen(f"export GOROOT=$(go env | grep GOROOT | cut -d \"'\" -f 2); export GOOS={goos}; export GOARCH={goarch}; go mod init golangs3stager; go mod tidy; go build -o {module_output['ModuleName']['OutPutFile']}").read())
-                                                    #os.chdir(currdir)
-
-                                                    # os.remove("./go.mod")
-                                                    # os.remove("./go.sum")
-                                                    # os.remove(f"{module_output['OutPutFile']}.go")
-
-                                                    del (module_output['ModuleName']['Code'])
-
-                                                    module_output['ModuleName']["Instructions"] = f"To build the binary, run: 'go mod init golangs3stager; go mod tidy; GOOS={goos} GOARCH={goarch} go build -o {module_output['ModuleName']['OutPutFile']}' inside directory .stagers/{module_output['ModuleName']['OutPutFile']} on another terminal"
-                                                    module_output['ModuleName'][
-                                                        'OutPutFile'] = f".stagers/{module_output['ModuleName']['OutPutFile']}/{module_output['ModuleName']['OutPutFile']}.go",
 
                                                 PrintAWSModule(module_output)
                                             except FileNotFoundError:
@@ -1852,7 +1865,7 @@ def main(workspace, particle, module_char):
                                 else:
                                     PrintAWSModule(module_output)
                         else:
-                            module_output = RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, "")
+                            module_output = RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, "", callstoprofile)
                             PrintAWSModule(module_output)
 
             elif command.split(" ")[0] == 'get_domain':
@@ -2162,6 +2175,8 @@ def main(workspace, particle, module_char):
                         print(output)
                         output = ""
 
+
+
             elif command.split(" ")[0] == 'shell':
                 if particle == "":
                     print(colored("[*] Please select a particle using: 'use particle <particle name>'", "red"))
@@ -2345,7 +2360,50 @@ def main(workspace, particle, module_char):
                 print(colored("Option 'set' is used with another option. Use help for more.", "red"))
 
             elif command.split(" ")[0] == 'set':
-                if command.split(" ")[1] == 'default-regions':
+                """
+                if command.split(" ")[1] == 'terraform':
+                    if command.split(" ")[2] == 'true':
+                        terraform = True
+
+                    elif command.split(" ")[2] == 'false':
+                        terraform = False
+                    else:
+                        print(colored("Only true or false are allowed for this command", "red"))
+                """
+                if command.split(" ")[1] == 'calls-to-profile':
+                    if "calls" in module_options:
+                        if "or" in module_options['calls']:
+                            modulecalls = [calls[:calls.index("or")], calls[calls.index("or") + 1:]]
+                        else:
+                            modulecalls = module_options['calls']
+
+                        contigencies = 0
+                        if len(modulecalls) > 1:
+                            contigencies = 1
+
+                        if len(modulecalls) == 1:
+                            if len(modulecalls[0]) > 1:
+                                contigencies = 1
+
+                        if contigencies == 1:
+                            '''choice = input(
+                                colored(f"""This module has several contingencies, where {modulecalls[0]} will get executed first, and if it fails, the other ones will try to get executed.
+                                                                    Choose the list to """)
+                            )'''
+                            allprofiles = []
+                            for sess_profile in all_sessions:
+                                allprofiles.append(sess_profile['profile'])
+
+                            for call in module_options['calls']:
+                                choice = input(f"Provide profile for {call}")
+
+                                while not choice in allprofiles:
+                                    choice = input(f"Profile did not exist. Provide profile for {call}")
+
+                                callstoprofile[call] = choice
+
+
+                elif command.split(" ")[1] == 'default-regions':
                     if len(command.split(" ")) < 3:
                         print(colored("[*] Set one or several regions split by comma. Usage: 'set default-regions <region-name>,<region-name2>,etc'", "red"))
                     else:
@@ -2372,12 +2430,56 @@ def main(workspace, particle, module_char):
                     else:
                         print()
 
-                elif command.split(" ")[1] == 'web-proxy':
+                elif command.split(" ")[1] == 'proxy-definitions':
                     if len(command.split(" ")) < 4:
                         print(colored("[*] The format of the command is: set web-proxies <http/https> <proxy url>\n"
-                                      "eg: set web-proxy http http://domain.tld:8080\n"
-                                      "eg: set web-proxy http http://1.2.3.4:8080", "red"))
+                                      "eg: set proxy-definitions http http://domain.tld:8080\n"
+                                      #"eg: set proxy-definitions https https://domain.tld:8080\n"
+                                      "eg: set proxy-definitions socks4 socks5://1.2.3.4:8080", "red"
+                                      "eg: set proxy-definitions socks5 socks5://1.2.3.4:8080", "red"))
+
+                    elif command.split(" ")[2] == 'socks5':
+                        if len(command.split(" ")) < 4:
+                            print(colored("[*] The format of the command is: set web-proxies <http/https> <proxy url>\n"
+                                          "eg: set proxy-definitions http http://domain.tld:8080\n"
+                                          #"eg: set proxy-definitions https https://domain.tld:8080\n"
+                                          "eg: set proxy-definitions socks4 socks5://1.2.3.4:8080", "red"
+                                          "eg: set proxy-definitions socks5 socks5://1.2.3.4:8080", "red"))
+                        else:
+                            socks_proxy = command.split(' ')[3].split("/")[2]
+                            web_proxies["socks5"] = socks_proxy
+
+                            print (colored(f"[*] Proxy set to {command.split(' ')[3]}", "green"))
+
+                    elif command.split(" ")[2] == 'socks4':
+                        if len(command.split(" ")) < 4:
+                            print(colored("[*] The format of the command is: set web-proxies <http/https> <proxy url>\n"
+                                          "eg: set proxy-definitions http http://domain.tld:8080\n"
+                                          #"eg: set proxy-definitions https https://domain.tld:8080\n"
+                                          "eg: set proxy-definitions socks4 socks5://1.2.3.4:8080", "red"
+                                          "eg: set proxy-definitions socks5 socks5://1.2.3.4:8080", "red"))
+                        else:
+                            socks_proxy = command.split(' ')[3].split("/")[2]
+                            web_proxies["socks4"] = socks_proxy
+
+                            print(web_proxies)
+
+                            print (colored(f"[*] Proxy set to {command.split(' ')[3]}", "green"))
+
                     elif command.split(" ")[2] == 'http':
+                        if len(command.split(" ")) < 4:
+                            print(colored("[*] The format of the command is: set web-proxies <http/https> <proxy url>\n"
+                                          "eg: set proxy-definitions http http://domain.tld:8080\n"
+                                          #"eg: set proxy-definitions https https://domain.tld:8080\n"
+                                          "eg: set proxy-definitions socks5 socks5://1.2.3.4:8080", "red"))
+
+                        else:
+                            socks_proxy = command.split(" ")[3].split("/")[2]
+                            web_proxies["http"] = socks_proxy
+
+                            print (colored(f"[*] Proxy set to {command.split(' ')[3]}", "green"))
+
+                    """elif command.split(" ")[2] == 'http':
                         webproxyInput = (command.split(" ")[3]).strip().replace("\n", "")
                         #webproxyInput = input(colored("Enter HTTP Web Proxy URL (eg: http://1.1.1.1:8080): ", "yellow"))
 
@@ -2422,11 +2524,11 @@ def main(workspace, particle, module_char):
                         except FileNotFoundError:
                             print(f"[*] {colored('Certificate File not found', 'red')}")
                         except Exception as e:
-                            print(f"[*] {colored(str(e), 'red')}")
+                            print(f"[*] {colored(str(e), 'red')}")"""
 
                 elif command.split(" ")[1] == 'azure-credentials':
                     if len(command.split(" ")) < 3:
-                        print(colored("[*] Usage: 'set credentials <username>'", "red"))
+                        print(colored("[*] Usage: 'set azure-credentials <username>'", "red"))
                     else:
                         yon = input("Are you putting an Access Token? [y/N] ")
                         if yon == "y" or yon == "Y":
@@ -2442,74 +2544,209 @@ def main(workspace, particle, module_char):
                                 "azure_tenant_id": tenant_id
                             }
 
-                        yon = input("Are credential Service Principal Credentials? [y/N] ")
-                        if yon == "y" or yon == "Y":
-                            tenant_id = input("Tenant ID: ")
-                            client_id = input("Client ID: ")
-                            yon = input("Are you using Client Secret? [y/N] ")
+                            cred_created = json.loads(
+                                requests.put("{}/api/latest/azurecredentials".format(apihost),
+                                             json=cred_json,
+                                             headers={"Authorization": "Bearer {}".format(
+                                                 jwt_token)}
+                                             ).text)
+
+                            if not "error" in cred_created:
+                                curr_creds = {
+                                    'provider': "AZURE",
+                                    'profile': cred_json['azure_creds_name'],
+                                    'azure_access_token': access_token,
+                                    'azure_refresh_token': refresh_token,
+                                    'azure_tenant_id': cred_json['azure_tenant_id']
+                                }
+                                cred_prof = cred_json['azure_creds_name']
+
+                                print(colored("[*] Credentials set. Use ", "green") + colored(
+                                    "'show credentials' ",
+                                    "blue") + colored(
+                                    "to check them.", "green"))
+
+                                print(colored("[*] Currect credential profile set to ", "green") + colored(
+                                    "'{}'.".format(cred_prof), "blue") + colored("Use ", "green") + colored(
+                                    "'show current-creds' ", "blue") + colored("to check them.", "green"))
+
+                        else:
+                            yon = input("Are credential Service Principal Credentials? [y/N] ")
                             if yon == "y" or yon == "Y":
-                                client_secret = input("Client Secret: ")
-                                cred_json = {
-                                    "azure_creds_name": command.split(" ")[2],
-                                    "azure_client_id": client_id,
-                                    "azure_client_secret": client_secret,
-                                    "azure_tenant_id": tenant_id
+                                tenant_id = input("Tenant ID: ")
+                                client_id = input("Client ID: ")
 
-                                }
+                                azure_creds_scope = input("Resource URL (default 'https://graph.microsoft.com/.default'): ")
+                                if azure_creds_scope == "":
+                                    azure_creds_scope = 'https://graph.microsoft.com/.default'
+
+                                yon = input("Are you using Client Secret? [y/N] ")
+                                if yon == "y" or yon == "Y":
+                                    client_secret = input("Client Secret: ")
+
+
+                                    token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+                                    data = {
+                                        'grant_type': 'client_credentials',
+                                        'client_id': client_id,
+                                        'client_secret': client_secret,
+                                        'scope': azure_creds_scope,
+                                    }
+                                    response = requests.post(token_url, data=data)
+                                    tokens = response.json()
+
+                                    cred_json = {
+                                        "azure_creds_name": command.split(" ")[2],
+                                        "azure_client_id": client_id,
+                                        "azure_client_secret": client_secret,
+                                        "azure_tenant_id": tenant_id,
+                                        "azure_creds_scope": [azure_creds_scope],
+                                        "azure_access_token": tokens['access_token']
+                                    }
+
+                                    cred_created = json.loads(
+                                        requests.put("{}/api/latest/azurecredentials".format(apihost),
+                                                     json=cred_json,
+                                                     headers={"Authorization": "Bearer {}".format(
+                                                         jwt_token)}
+                                                     ).text)
+
+                                    if not "error" in cred_created:
+                                        curr_creds = {
+                                            'provider': "AZURE",
+                                            'profile': cred_json['azure_creds_name'],
+                                            'azure_access_token': tokens["access_token"],
+                                            'azure_refresh_token': '',
+                                            'azure_tenant_id': cred_json['azure_tenant_id'],
+                                            'azure_creds_scope': cred_json['azure_creds_scope']
+                                        }
+                                        cred_prof = cred_json['azure_creds_name']
+
+                                        print(colored("[*] Credentials set. Use ", "green") + colored(
+                                            "'show credentials' ",
+                                            "blue") + colored(
+                                            "to check them.", "green"))
+
+                                        print(colored("[*] Currect credential profile set to ", "green") + colored(
+                                            "'{}'.".format(cred_prof), "blue") + colored("Use ", "green") + colored(
+                                            "'show current-creds' ", "blue") + colored("to check them.", "green"))
+
+
+                                    else:
+                                        print(colored("[*] {}".format(cred_created['error']), "red"))
+
+                                else:
+                                    client_cert = input("Client Certificate")
+                                    from cryptography.hazmat.primitives import serialization
+                                    with open(private_key_path, 'rb') as f:
+                                        private_key = serialization.load_pem_private_key(
+                                            f.read(),
+                                            password=None,
+                                        )
+                                    token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+                                    now = int(time.time())
+                                    jwt_payload = {
+                                        'aud': token_url,
+                                        'iss': client_id,
+                                        'sub': client_id,
+                                        'jti': str(uuid.uuid4()),
+                                        'nbf': now,
+                                        'exp': now + 600,  # 10 minutes
+                                    }
+
+                                    jwt_headers = {
+                                        'alg': 'RS256',
+                                        'x5t': cert_thumbprint,
+                                        'typ': 'JWT',
+                                    }
+
+                                    client_assertion = jwt.encode(
+                                        payload=jwt_payload,
+                                        key=private_key,
+                                        algorithm='RS256',
+                                        headers=jwt_headers
+                                    )
+
+                                    # === Request token ===
+                                    data = {
+                                        'client_id': client_id,
+                                        'scope': scope,
+                                        'grant_type': 'client_credentials',
+                                        'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                                        'client_assertion': client_assertion,
+                                    }
+
+                                    response = requests.post(token_url, data=data)
+                                    response.raise_for_status()
+                                    tokens = response.json()
+
+                                    cred_json = {
+                                        "azure_creds_name": command.split(" ")[2],
+                                        "azure_client_id": client_id,
+                                        "azure_client_cert": client_cert,
+                                        "azure_tenant_id": tenant_id,
+                                        "azure_creds_scope": [azure_creds_scope]
+                                    }
+                                    cred_created = json.loads(
+                                        requests.put("{}/api/latest/azurecredentials".format(apihost),
+                                                     json=cred_json,
+                                                     headers={"Authorization": "Bearer {}".format(
+                                                         jwt_token)}
+                                                     ).text)
+
+                                    if not "error" in cred_created:
+                                        token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+                                        data = {
+                                            'grant_type': 'client_credentials',
+                                            'client_id': client_id,
+                                            'client_secret': client_cert,
+                                            'scope': scope,
+                                        }
+
+                                        print(
+                                            colored("[*] Credential '{}' Created.".format(command.split(" ")[2]),
+                                                    "green"))
+                                        curr_creds = {
+                                            'provider': "AZURE",
+                                            'profile': cred_json['azure_creds_name'],
+                                            'azure_access_token': tokens['access_token'],
+                                            'azure_refresh_token': cred_json['azure_refresh_token'],
+                                            'azure_tenant_id': cred_json['azure_tenant_id'],
+                                            'azure_creds_scope': cred_json['azure_creds_scope']
+                                        }
+                                        cred_prof = cred_json['azure_creds_name']
+
+                                        print(colored("[*] Credentials set. Use ", "green") + colored(
+                                            "'show credentials' ",
+                                            "blue") + colored(
+                                            "to check them.", "green"))
+
+                                        print(colored("[*] Currect credential profile set to ", "green") + colored(
+                                            "'{}'.".format(cred_prof), "blue") + colored("Use ", "green") + colored(
+                                            "'show current-creds' ", "blue") + colored("to check them.", "green"))
+
+
+                                    else:
+                                        print(colored("[*] {}".format(cred_created['error']), "red"))
+
+
+                                del cred_json
+
+                            """
                             else:
-                                client_cert = input("Client Certificate")
+                                email = input("User Email: ")
+                                password = input("User Password: ")
+                                tenant_id = input("Tenant ID: ")
+
                                 cred_json = {
                                     "azure_creds_name": command.split(" ")[2],
-                                    "azure_client_id": client_id,
-                                    "azure_client_cert": client_cert,
-                                    "azure_tenant_id": tenant_id
+                                    "azure_tenant_id": tenant_id,
+                                    "azure_user_principal_name": email,
+                                    "azure_password": password
                                 }
-
-                        else:
-                            email = input("User Email: ")
-                            password = input("User Password: ")
-                            tenant_id = input("Tenant ID: ")
-
-                            cred_json = {
-                                "azure_creds_name": command.split(" ")[2],
-                                "azure_tenant_id": tenant_id,
-                                "azure_user_principal_name": email,
-                                "azure_password": password
-                            }
-
-                        cred_created = json.loads(requests.put("{}/api/latest/azurecredentials".format(apihost),
-                                                                  json=cred_json,
-                                                                  headers={"Authorization": "Bearer {}".format(jwt_token)}
-                                                                  ).text)
-
-                        if not "error" in cred_created:
-                            print(colored("[*] Credential '{}' Created.".format(command.split(" ")[2]), "green"))
-                            curr_creds = {
-                                'provider': "AZURE",
-                                'profile': "",
-                                'access_key_id': "",
-                                'secret_key': "",
-                                'region': ""
-                            }
-                            curr_creds['provider'] = 'DIGITALOCEAN'
-                            curr_creds['profile'] = set_digitalocean_creds_body["digitalocean_profile_name"]
-                            curr_creds['access_key_id'] = set_digitalocean_creds_body["digitalocean_access_key"]
-                            curr_creds['secret_key'] = set_digitalocean_creds_body["digitalocean_secret_key"]
-                            curr_creds['region'] = set_digitalocean_creds_body["digitalocean_region"]
-
-                            print(colored("[*] Credentials set. Use ", "green") + colored("'show credentials' ",
-                                                                                          "blue") + colored(
-                                "to check them.", "green"))
-
-                            print(colored("[*] Currect credential profile set to ", "green") + colored(
-                                "'{}'.".format(cred_prof), "blue") + colored("Use ", "green") + colored(
-                                "'show current-creds' ", "blue") + colored("to check them.", "green"))
+                            """
 
 
-                        else:
-                            print(colored("[*] {}".format(cred_created['error']), "red"))
-
-                        del cred_json
                 elif command.split(" ")[1] == 'do-credentials':
                     set_digitalocean_creds_body = {}
                     if len(command.split(" ")) == 2:
@@ -2561,18 +2798,12 @@ def main(workspace, particle, module_char):
                                     print(colored("[*] {}".format(set_creds['error']), "red"))
 
                                 else:
-                                    curr_creds = {
-                                        'provider': "",
-                                        'profile': "",
-                                        'access_key_id': "",
-                                        'secret_key': "",
-                                        'region': ""
-                                    }
-                                    curr_creds['provider'] = 'DIGITALOCEAN'
-                                    curr_creds['profile'] = set_digitalocean_creds_body["digitalocean_profile_name"]
-                                    curr_creds['access_key_id'] = set_digitalocean_creds_body["digitalocean_access_key"]
-                                    curr_creds['secret_key'] = set_digitalocean_creds_body["digitalocean_secret_key"]
-                                    curr_creds['region'] = set_digitalocean_creds_body["digitalocean_region"]
+                                    curr_creds = {'provider': 'DIGITALOCEAN',
+                                                  'profile': set_digitalocean_creds_body["digitalocean_profile_name"],
+                                                  'access_key_id': set_digitalocean_creds_body[
+                                                      "digitalocean_access_key"],
+                                                  'secret_key': set_digitalocean_creds_body["digitalocean_secret_key"],
+                                                  'region': set_digitalocean_creds_body["digitalocean_region"]}
 
                                     print(colored("[*] Credentials set. Use ", "green") + colored("'show credentials' ",
                                                     "blue") + colored("to check them.", "green"))
@@ -2603,15 +2834,9 @@ def main(workspace, particle, module_char):
                                 sess_test['provider'] = 'DIGITALOCEAN'
                                 all_sessions.append(sess_test)
 
-                                curr_creds = {
-                                    'provider': "",
-                                    'profile': "",
-                                    'digitalocean_token': ""
-                                }
-
-                                curr_creds['provider'] = 'DIGITALOCEAN'
-                                curr_creds['profile'] = set_digitalocean_creds_body["digitalocean_profile_name"]
-                                curr_creds['digitalocean_token'] = set_digitalocean_creds_body["digitalocean_token"]
+                                curr_creds = {'provider': 'DIGITALOCEAN',
+                                              'profile': set_digitalocean_creds_body["digitalocean_profile_name"],
+                                              'digitalocean_token': set_digitalocean_creds_body["digitalocean_token"]}
 
                                 print(colored("[*] Credentials set. Use ", "green") + colored("'show credentials' ",
                                                                                               "blue") + colored(
@@ -2645,7 +2870,6 @@ def main(workspace, particle, module_char):
                     elif len(command.split(" ")) > 2:
                         access_key_id = input("Access Key ID: ")
 
-                        # AKIA4MTWLERB3KP6LC66
                         while not re.match("AKIA[A-Z0-9]{16}", access_key_id) and not re.match("ASIA[A-Z0-9]{16}", access_key_id):
                             access_key_id = input("Access Key ID: ")
 
@@ -2701,18 +2925,10 @@ def main(workspace, particle, module_char):
                                     print(colored("[*] {}".format(set_creds['error']), "red"))
 
                                 else:
-                                    curr_creds = {
-                                        'provider': "",
-                                        'profile': "",
-                                        'access_key_id': "",
-                                        'secret_key': "",
-                                        'region': ""
-                                    }
-                                    curr_creds['provider'] = "AWS"
-                                    curr_creds['profile'] = set_aws_creds_body["aws_profile_name"]
-                                    curr_creds['access_key_id'] = set_aws_creds_body["aws_access_key"]
-                                    curr_creds['secret_key'] = set_aws_creds_body["aws_secret_key"]
-                                    curr_creds['region'] = set_aws_creds_body["aws_region"]
+                                    curr_creds = {'provider': "AWS", 'profile': set_aws_creds_body["aws_profile_name"],
+                                                  'access_key_id': set_aws_creds_body["aws_access_key"],
+                                                  'secret_key': set_aws_creds_body["aws_secret_key"],
+                                                  'region': set_aws_creds_body["aws_region"]}
 
                                     if 'aws_session_token' in set_aws_creds_body:
                                         curr_creds['session_token'] = set_aws_creds_body["aws_session_token"]
@@ -2762,7 +2978,8 @@ def main(workspace, particle, module_char):
             command = session.prompt(
                 ANSI(com),
                 completer=completer,
-                complete_style=CompleteStyle.READLINE_LIKE
+                complete_while_typing=True
+                #complete_style=CompleteStyle.READLINE_LIKE
             )
     except KeyboardInterrupt:
         command = input(

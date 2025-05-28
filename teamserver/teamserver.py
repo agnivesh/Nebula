@@ -13,11 +13,13 @@ import docker
 import mongoengine
 # import termcolor
 from flask import Flask
+#from flask_rbac import RBAC
 from flask_bcrypt import Bcrypt
 from flask_bcrypt import generate_password_hash
 from flask_jwt_extended import JWTManager
 from termcolor import colored
 from waitress import serve
+#from flask_rbac import Role
 
 from core.Listeners.WebSocket.server import start_websocket_listener
 from core.database.db import initialize_db
@@ -33,6 +35,11 @@ from core.models.Domains import domains_blueprint
 from core.models.Listeners import listener_blueprint
 from core.models.Modules import module_blueprint
 from core.models.AWSS3Buckets import awsbuckets_blueprint
+from core.models.ReverseTunnels import reverse_tunnels_blueprint
+
+
+from core.database.models import TeamserverLogs
+
 
 parser = argparse.ArgumentParser(description='------ Nebula Teamserver Options ------')
 #parser.add_argument('-ah', '--apiHost', type=str, help='The API Server Host. (Default: 127.0.0.1)', default='127.0.0.1')
@@ -196,6 +203,29 @@ input_text += ("{} misc\n".format(nr_of_modules['misc']))
 
 print (input_text)
 app = Flask(__name__)
+
+"""rbac = RBAC()
+# Define roles
+cosmonaut = Role('cosmonaut')
+pentester = Role('pentester')
+enumerator = Role('enumerator')
+c2specialist = Role('c2specialist')
+
+# Cosmonaut privs = *
+cosmonaut.add_child(pentester)
+cosmonaut.add_child(enumerator)
+cosmonaut.add_child(c2specialist)
+
+# Pentester has access to each module and credential
+pentester.add_child(enumerator)
+pentester.add_child(c2specialist)
+
+rbac.set_role_model(Role)
+rbac.register(cosmonaut)
+rbac.register(enumerator)
+rbac.register(c2specialist)
+rbac.register(pentester)"""
+
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
@@ -223,7 +253,7 @@ else:
 sessionfile = f"{botocore.__path__[0]}/session.py"
 useragentfile = f"{botocore.__path__[0]}/.user-agent"
 
-with open(sessionfile, "r") as botocoresessionfile:
+"""with open(sessionfile, "r") as botocoresessionfile:
     botocorecheck = 0
     botocoresessionfilelines = botocoresessionfile.readlines()
     for line in botocoresessionfilelines:
@@ -242,7 +272,19 @@ with open(sessionfile, "r") as botocoresessionfile:
                     botocoresessiontemp.write(bline)
 
                 else:
-                    botocoresessiontemp.write(bline)
+                    botocoresessiontemp.write(bline)"""
+
+with open(sessionfile, "r") as botocoresessionfile:
+    botocorecheck = 0
+    botocoresessionfilelines = botocoresessionfile.readlines()
+
+    with open(sessionfile, "w") as botocoresessiontemp:
+        for bline in botocoresessionfilelines:
+            if "self.user_agent_name = 'Botocore'" in bline:
+                botocoresessiontemp.write("self.user_agent_name = ''")
+
+            else:
+                botocoresessiontemp.write(bline)
 
 try:
     #a_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -337,25 +379,24 @@ try:
         colored(database, "blue")
     ))
 
-    # I am not using these on Nebula. So it's not an information disclosure. It's just sth I plan to use latter.
-
-    #app.config['MONGODB_USERNAME'] = 'user'
-    #app.config['MONGODB_PASSWORD'] = 'pass'
-
     initialize_db(app)
 
     try:
         body = {
             "cosmonaut_name": "cosmonaut",
-            "cosmonaut_pass": password
+            "cosmonaut_pass": password,
+            #"cosmonaut_role": 'cosmonaut'
         }
         cosmonaut = Cosmonaut(**body)
         cosmonaut.hash_password()
         cosmonaut.save()
     except mongoengine.errors.NotUniqueError as ex:
-        cosmonaut = Cosmonaut.objects.get(cosmonaut_name=body['cosmonaut_name'])
+        cosmonaut = Cosmonaut.objects.get(cosmonaut_name="cosmonaut")
+        body = {
+            "cosmonaut_name": "cosmonaut",
+            'cosmonaut_pass': generate_password_hash(password).decode('utf8')
+        }
 
-        body['cosmonaut_pass'] = generate_password_hash(password).decode('utf8')
         cosmonaut.update(**body)
 
     #import socket
@@ -386,6 +427,7 @@ try:
     app.register_blueprint(domains_blueprint)
     app.register_blueprint(clientcommands_blueprint)
     app.register_blueprint(awsbuckets_blueprint)
+    app.register_blueprint(reverse_tunnels_blueprint)
 
 except SystemExit:
     exit()
@@ -458,6 +500,16 @@ if __name__ == "__main__":
     ))
     print(colored('------------------------------------------------------------', "green"))
 
-    startWebsocketListeners()
+    print(
+        colored("[*] Previous Logs:", "yellow")
+    )
+    try:
+        logs = TeamserverLogs.objects().to_json()
+        for log in json.loads(logs):
+            print(f"[*] {log['teamserver_event_description']}")
+    except Exception as e:
+        print(f"Error Printing Logs: {colored(str(e), 'red')}")
+
+    print(colored('------------------------------------------------------------', "green"))
 
     serve(app, host=apihost, port=apiport)

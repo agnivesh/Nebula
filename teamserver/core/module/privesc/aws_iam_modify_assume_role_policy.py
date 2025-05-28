@@ -30,7 +30,7 @@ description = "Create a 2nd access key to a user. To do this, the user needs to 
 
 aws_command = "aws ec2 add-user-to-group --user-name {} --group {} --region {} --profile {}"
 
-def exploit(all_sessions, cred_prof, useragent, web_proxies, workspace):
+def exploit(all_sessions, cred_prof, useragent, web_proxies, callstoprofile):
 	role = variables['ROLE']['value']
 	policydoc = variables['POLICY-DOCUMENT']['value']
 

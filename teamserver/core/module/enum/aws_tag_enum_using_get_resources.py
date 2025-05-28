@@ -20,7 +20,7 @@ variables = {
     }
 }
 
-description = "List all resources on the infrastructure based on the ."
+description = "List all resources on the infrastructure based on the tags they have."
 
 calls = [
     'tag:GetResources'
@@ -491,7 +491,20 @@ def filterTagsAndResources(resourceArn, tags):
         "TagsFilter": tagFilter
     }
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
+    try:
+        response = profile.get_resources()
+        resources = response["ResourceTagMappingList"]
+        while response['PaginationToken'] != "":
+            response = profile.get_resources(
+                PaginationToken=response['PaginationToken']
+            )
+            resources.extend(response["ResourceTagMappingList"])
+        return {"Resources": resources}
+    except Exception as e:
+        return {"error": f"Error retrieving resources tags: {str(e)}"}
+
+def exploit2(profile, callstoprofile):
     try:
         # Get all groups
         try:

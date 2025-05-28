@@ -74,7 +74,7 @@ description = "Gets the name of a basename or a list of basenames separated by c
 
 aws_command = "No awscli command"
 
-def exploit(workspace):
+def exploit(callstoprofile):
     objects = []
     basenames = {}
     array = [0, 0, 0, 0, 0, 0, 0, 0]
@@ -108,7 +108,7 @@ def exploit(workspace):
                         else:
                             try:
                                 url = "{0}-dns-{1}.hcp.{2}.azmk8s.io".format(basename, random_part, region)
-                                print(url)
+                                #print(url)
                                 dns.resolver.resolve(url)
                                 basenames[url] = "AKS Endpoint"
                             except dns.resolver.NXDOMAIN:

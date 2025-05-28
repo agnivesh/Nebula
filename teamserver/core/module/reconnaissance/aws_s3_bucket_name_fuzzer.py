@@ -45,7 +45,7 @@ description = "Gets the name of a bucket or a list of buckets separated by comma
 aws_command = "No awscli command"
 
 
-def exploit(workspace):
+def exploit(callstoprofile):
     buckets = []
 
     if variables['BUCKET']['value'] == "" and variables['WORDLIST']['value'] != "":

@@ -36,12 +36,10 @@ variables = {
 
 }
 
-global device_code_request_json
-
-description = "This module will try to get as many information on the user's account on O365, based on the its privileges."
+description = "This module will to add a user to a group in AzureAD"
 aws_command = "No cli command"
 
-def exploit(profile, workspace):
+def exploit(profile, callstoprofile):
     access_token = profile['azure_access_token']
 
     user_id_or_upn = variables['USER-ID-OR-UPN']['value']
